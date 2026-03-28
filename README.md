@@ -1,11 +1,13 @@
 # 全球海洋大气耦合时空可视化分析系统
-！PS：要提交的时候记得先创建个分支
-## 项目结构 (Project Structure)
+！PS：要提交的时候记得先创建个分支,写代码的时候先pull一下同步
 
+## 项目结构 (Project Structure)
 ```text
-├── .gitignore          # Git 忽略文件配置文件（已屏蔽 .venv, .DS_Store 等）
+├── .gitignore          # Git 忽略文件配置文件
 ├── README.md           # 你正在阅读的项目说明书
-├── ScreenShot/         # 实验屏幕截图
+├── ScreenShots/        # 实验屏幕截图
+├── Doc/                # 文档文件含实验报告
+├── personal_work/      # 独立成果文件夹
 └── D3_Lab/             # 系统核心代码文件夹
     ├── index.html      # D3导入成功测试页面
     ├── line_chart.html # 特定的折线图测试页面（目前正在开发）
