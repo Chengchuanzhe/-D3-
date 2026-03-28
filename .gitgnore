@@ -18,3 +18,6 @@ __pycache__/
 # 如果是大文件，建议使用 Git LFS 或者放在网盘里，并在 README 里附上链接。
 # 如果想忽略大型 netCDF 数据文件，请把下面这行的 # 号去掉：
 # *.nc
+
+# 忽略 Word/Excel 等 Office 软件产生的临时文件
+~$*
