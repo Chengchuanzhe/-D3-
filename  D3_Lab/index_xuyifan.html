@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>  
+    <title>My D3.js Example</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+<meta charset="utf-8">
+</head>
+<body>
+    <h1>D3.js test</h1>
+    <svg width="200" height="200"></svg>
+    <script>
+        //许一凡基础图形绘制
+        console.log("D3.js 加载成功，版本号：", d3.version);
+        const svg = d3.select('svg');
+        
+        // 蓝色矩形
+        svg.append('rect')
+           .attr('x', 10)
+           .attr('y', 10)
+           .attr('width', 70)
+           .attr('height', 70)
+           .attr('fill', 'blue');
+
+        // 红色圆形
+        svg.append('circle')
+            .attr('cx', 150)
+            .attr('cy', 50)
+            .attr('r', 40)
+            .attr('fill', 'red');
+
+        // 黄色椭圆形
+        svg.append('ellipse')
+            .attr('cx', 100)
+            .attr('cy', 150)
+            .attr('rx', 80)
+            .attr('ry', 40)
+            .attr('fill', 'yellow');
+    </script> 
+</body>
+</html>
