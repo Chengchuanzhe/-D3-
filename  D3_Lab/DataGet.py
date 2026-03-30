@@ -1,12 +1,11 @@
+# 【2组-王哲-数据获取与清洗-第一周】2026-3-25
 import requests
 import pandas as pd
 import xarray as xr
 import json
 
 
-# ==========================================
 # 1. 核心配置区：中国东海海域，2024年初
-# ==========================================
 LATITUDE = 25.0  # 北纬 25度
 LONGITUDE = 122.0  # 东经 122度
 START_DATE = "2024-01-01"
@@ -15,9 +14,7 @@ END_DATE = "2024-02-20"  # 共 51 天的数据
 print("开始执行海气耦合数据清洗 Pipeline...")
 
 
-# ==========================================
 # 2. 获取大气数据 (通过 API)
-# ==========================================
 def fetch_atmosphere_data():
     print("-> 正在调用 Open-Meteo API 获取大气数据...")
     # 已将 surface_pressure 替换为 pressure_msl_mean
@@ -33,11 +30,6 @@ def fetch_atmosphere_data():
     response = requests.get(url)
     api_result = response.json()
 
-    # 增加一层错误拦截，防止程序直接崩溃
-    if "error" in api_result:
-        print("\n❌ API 请求失败，返回错误信息：", api_result.get("reason"))
-        return None
-
     data = api_result["daily"]
 
     # 转化为 DataFrame 方便后续操作
@@ -45,7 +37,7 @@ def fetch_atmosphere_data():
         {
             "date": data["time"],
             "air_temp": data["temperature_2m_mean"],
-            "pressure": data["pressure_msl_mean"],  # 这里同步修改了键名
+            "pressure": data["pressure_msl_mean"],  
             "humidity": data["relative_humidity_2m_mean"],
             "precipitation": data["precipitation_sum"],
             "radiation": data["shortwave_radiation_sum"],
@@ -56,9 +48,7 @@ def fetch_atmosphere_data():
     return df_atmos
 
 
-# ==========================================
 # 3. 获取海洋数据 (读取本地 .nc 文件)
-# ==========================================
 def process_ocean_data(nc_file_path):
     print("-> 正在解析本地 Copernicus 海洋 NetCDF 数据...")
     try:
@@ -69,7 +59,7 @@ def process_ocean_data(nc_file_path):
 
         # 提取核心字段并标准化时间格式
         df_ocean["date"] = df_ocean["time"].dt.strftime("%Y-%m-%d")
-        # 这里的字段名取决于你下载的具体变量，通常 thetao=海温, so=盐度, zos=海平面
+
         df_clean_ocean = df_ocean[["date", "thetao", "so", "zos"]].copy()
         df_clean_ocean.rename(
             columns={"thetao": "sea_temp", "so": "salinity", "zos": "sea_level"},
@@ -77,13 +67,11 @@ def process_ocean_data(nc_file_path):
         )
         return df_clean_ocean
     except FileNotFoundError:
-        print("!! 找不到 ocean_data.nc 文件，请确认是否已下载并放入当前目录。")
+        print("找不到 ocean_data.nc 文件。")
         return None
 
 
-# ==========================================
 # 4. 数据耦合、清洗与输出 (数据结构化)
-# ==========================================
 df_atmos = fetch_atmosphere_data()
 df_ocean = process_ocean_data(
     "/Users/wangzhe/Documents/Course- Experiment/Visual Tech/E1/ D3_Lab/ocean_data.nc"
@@ -109,7 +97,7 @@ if df_ocean is not None:
         json.dump(output_json, f, indent=4)
 
     print(
-        f"✅ 成功！已生成包含 {len(output_json)} 条记录、13 个维度的 coupled_data.json 文件。"
+        f"已生成包含 {len(output_json)} 条记录、13 个维度的 coupled_data.json 文件。"
     )
 else:
     print("-> 流程暂停：请先完成 Copernicus 海洋数据的下载。")
