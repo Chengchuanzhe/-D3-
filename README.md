@@ -1,6 +1,8 @@
 # 全球海洋大气耦合时空可视化分析系统
 ！PS：要提交的时候记得先创建个分支,写代码的时候先pull一下同步
 
+Week2(WZ): Data.json是最新的5000条数据一共14维，新加变量region_name表示不同区域名称
+
 ## 项目结构 (Project Structure)
 ```text
 ├── .gitignore          # Git 忽略文件配置文件
