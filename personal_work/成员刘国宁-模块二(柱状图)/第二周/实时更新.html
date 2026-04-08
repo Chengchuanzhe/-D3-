@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>动态气压趋势 · 柱状图</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="chart-card">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;">
+        <div>
+            <h1>大气压力变化趋势 · 动态更新</h1>
+            <div class="sub">日平均海平面气压</div>
+        </div>
+    </div>
+    <div id="chart"></div>
+    <footer>单位: hPa (百帕) &nbsp;</footer>
+</div>
+
+<script>
+    let originalData = null;   // 存储原始数据
+    let currentData = null;    // 当前显示的数据
+    let svg, x, y, width, height, margin;
+
+    // 初始化图表结构（只创建一次）
+    function initChart(data) {
+        margin = { top: 20, right: 30, bottom: 40, left: 40 };
+        width = 800 - margin.left - margin.right;
+        height = 400 - margin.top - margin.bottom;
+
+        const parseDate = d3.timeParse("%Y-%m-%d");
+        const dates = data.day.map(d => parseDate(d));
+        const records = data.day.map((day, i) => ({ day: dates[i], pressure: data.pressure[i] }));
+
+        // 创建 svg
+        svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom);
+
+        // 比例尺
+        x = d3.scaleTime()
+            .domain(d3.extent(dates))
+            .range([margin.left, margin.left + width]);
+
+        const maxPressure = d3.max(data.pressure);
+        const minPressure = d3.min(data.pressure);
+        y = d3.scaleLinear()
+            .domain([minPressure - 10, maxPressure])
+            .range([margin.top + height, margin.top]);
+
+        // 绘制坐标轴（先画轴线，后续更新时重新调用）
+        svg.append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0, ${margin.top + height})`);
+
+        svg.append("g")
+            .attr("class", "y-axis")
+            .attr("transform", `translate(${margin.left}, 0)`);
+
+        // 绘制网格线（可选）
+        svg.append("g")
+            .attr("class", "grid")
+            .attr("transform", `translate(${margin.left}, 0)`);
+
+        // 初次绘制柱子
+        updateChart(records);
+    }
+
+    // 核心更新函数：接收新数据（records 格式: [{day, pressure}, ...]）
+    function updateChart(newRecords) {
+        if (!svg) return;
+
+        // 1. 更新 y 比例尺的 domain（适应新数据的范围）
+        const newPressures = newRecords.map(d => d.pressure);
+        const newMax = d3.max(newPressures);
+        const newMin = d3.min(newPressures);
+        y.domain([newMin - 10, newMax]);
+
+        // 2. 更新 x 比例尺（如果日期范围变化了）
+        const newDates = newRecords.map(d => d.day);
+        x.domain(d3.extent(newDates));
+
+        // 3. 计算柱宽（基于相邻日期差值）
+        let barWidth = 5;
+        if (newRecords.length >= 2) {
+            const timeDiff = newDates[1].getTime() - newDates[0].getTime();
+            const pixelDiff = x(newDates[1]) - x(newDates[0]);
+            barWidth = Math.max(4, pixelDiff * 0.7); // 留出间距
+        }
+
+        // 4. 绑定数据并更新矩形（使用 join 方式）
+        const bars = svg.selectAll(".bar").data(newRecords, d => d.day); // key by date
+
+        // exit: 移除多余柱子
+        bars.exit()
+            .transition()
+            .duration(500)
+            .attr("height", 0)
+            .attr("y", y(0))
+            .remove();
+
+        // enter: 新增柱子（初始高度为0，再过渡到实际高度）
+        const enterBars = bars.enter()
+            .append("rect")
+            .attr("class", "bar")
+            .attr("x", d => x(d.day) - barWidth / 2)
+            .attr("y", y(0))   // 从基线开始
+            .attr("width", barWidth)
+            .attr("height", 0)
+            .attr("fill", "steelblue");
+
+        // update: 合并新旧并过渡到新状态
+        const merged = enterBars.merge(bars);
+
+        merged.transition()
+            .duration(800)
+            .ease(d3.easeCubicOut)
+            .attr("x", d => x(d.day) - barWidth / 2)
+            .attr("y", d => y(d.pressure))
+            .attr("height", d => margin.top + height - y(d.pressure))
+            .attr("fill", "steelblue")
+            .attr("width",(d,i) => i === 0 ? 0:barWidth);
+
+        // 5. 更新坐标轴（带过渡）
+        const xAxis = d3.axisBottom(x)
+            .ticks(d3.timeDay.every(4))
+            .tickFormat(d3.timeFormat("%m-%d"));
+        const yAxis = d3.axisLeft(y);
+
+        svg.select(".x-axis")
+            .transition()
+            .duration(800)
+            .call(xAxis);
+
+        svg.select(".y-axis")
+            .transition()
+            .duration(800)
+            .call(yAxis);
+
+        // 更新网格线（y方向）
+        svg.select(".grid")
+            .transition()
+            .duration(800)
+            .call(d3.axisLeft(y)
+                .ticks(6)
+                .tickSize(-width)
+                .tickFormat("")
+            );
+    }
+
+    // 从 JSON 加载原始数据
+    d3.json("pressure-day.json").then(raw => {
+        originalData = raw;
+        // 转换日期格式
+        const parseDate = d3.timeParse("%Y-%m-%d");
+        const records = raw.day.map((d, i) => ({
+            day: parseDate(d),
+            pressure: raw.pressure[i]
+        }));
+        currentData = [...records];
+        initChart(raw);          // 初始化画布和初次绘制
+    }).catch(err => {
+        console.error("数据加载失败", err);
+        document.getElementById("chart").innerHTML = '<div class="message">⚠️ 无法加载 pressure-day.json</div>';
+    });
+</script>
+</body>
+</html>

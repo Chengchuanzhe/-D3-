@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <div>
+        <h1>基础图象展示</h1>
+        <div id="chart"></div>
+    </div>
+    <script>
+        svg = d3.select("#chart").append("svg").attr("width",400).attr("height",400)
+        svg.append("rect").attr("x",0).attr("y",0).attr("width",200).attr("height",200).attr("fill","red")
+        svg.append("circle").attr("cx",300).attr("cy",100).attr("r",100).attr("fill","steelblue")
+        svg.append("ellipse").attr("cx",200).attr("cy",300).attr("rx",200).attr("ry",100).attr("fill","green")
+    </script>
+</body>
