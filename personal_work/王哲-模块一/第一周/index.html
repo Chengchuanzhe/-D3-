@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>D3.js 实验 1</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+    <h1>2组-D3测试</h1>
+    <script>
+        // 在浏览器控制台打印 D3 版本，验证是否加载成功
+        console.log("D3.js 加载成功！版本号：", d3.version);
+
+        // 1. 铺开一张 SVG 画布
+            const svg = d3.select("body")      
+                .append("svg")         
+                .attr("width", 1080)  
+                .attr("height", 1920)   
+           
+
+            // 2. 绘制一个矩形 (rect)
+            svg.append("rect")
+                .attr("x", 50)       
+                .attr("y", 70)       
+                .attr("width", 100)  
+                .attr("height", 60)  
+                .attr("fill", "blue"); 
+
+            // 3. 绘制一个圆形 (circle)
+            svg.append("circle")
+                .attr("cx", 350)    
+                .attr("cy", 100)      
+                .attr("r", 50)       
+                .attr("fill", "tomato");  
+
+            // 4. 绘制一个椭圆 (ellipse)
+            svg.append("ellipse")
+                .attr("cx", 650)     
+                .attr("cy", 100)     
+                .attr("rx", 60)     
+                .attr("ry", 30)      
+                .attr("fill", "mediumseagreen"); 
+    </script>
+</body>
+
+</html>
