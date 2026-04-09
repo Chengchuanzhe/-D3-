@@ -1,25 +1,16 @@
 import json
 import numpy as np
 
-with open('coupled_data.json', 'r') as f:
+with open('personal_work/成员刘国宁-模块二(柱状图)/第一周/Data.json', 'r',encoding='utf-8') as f:
     data = json.load(f)
 # 处理数据
-Day = [d['date'] for d in data]
-pressure = [d['pressure'] for d in data]
-pre = []
-pre.append(pressure[0])
-day = []
-day.append(Day[0])
-m = 0
-while(m<len(pressure)-1):
-    pre.append(np.round(np.mean(pressure[m+1:m+25]),1))
-    day.append(Day[m+1])
-    m=m+24 
+Day = [d['date'] for d in data if d["region_name"] == "台湾海峡"]
+pressure = [d['pressure'] for d in data if d["region_name"] == "台湾海峡"]
 
 output = {
-    "day":day,
-    "pressure":pre
+    "day":Day,
+    "pressure":pressure
 }
 
-with open("pressure-day.json","w") as f:
+with open('personal_work/成员刘国宁-模块二(柱状图)/第一周/pressure-day.json', 'w',encoding='utf-8') as f:
     json.dump(output, f, allow_nan=False)
