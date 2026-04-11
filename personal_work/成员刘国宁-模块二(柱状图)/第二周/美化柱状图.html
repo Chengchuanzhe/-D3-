@@ -13,7 +13,7 @@
     <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;">
         <div>
             <h1>大气压力变化趋势</h1>
-            <div class="sub">日平均海平面气压</div>
+            <div class="sub">台湾海峡日平均海平面气压</div>
         </div>
     </div>
     <div id="chart">
@@ -28,6 +28,7 @@
             height = 400 - margin.top - margin.bottom;
             pressure = data.pressure;
             const days = data.day
+            widthbar = width/pressure.length;
             max = d3.max(pressure); 
             min = d3.min(pressure);
             const parseDate = d3.timeParse("%Y-%m-%d");
@@ -36,8 +37,8 @@
             const svg = d3.select("#chart").append("svg").attr("width",width+margin.left+margin.right).attr("height",height+margin.top+margin.bottom);
             const x = d3.scaleTime().domain(d3.extent(dates)).range([margin.left,margin.left+width]);
             const y = d3.scaleLinear().domain([min-10, max]).range([margin.top+height,margin.top]);
-            svg.selectAll(".bar").data(record).enter().append("rect").attr("class","bar").attr("x",(d) => x(d.day)-2.5).attr("y",(d) => y(d.pressure)).attr("width",(d,i) => i === 0 ? 0:5).attr("height",(d) => height - y(d.pressure) + margin.top).attr("fill","steelblue");
-            svg.append("g").attr("class","x-axis").attr("transform","translate(0," + (margin.top+height) + ")").call(d3.axisBottom(x).ticks(d3.timeDay.every(4)).tickFormat(d3.timeFormat("%m-%d")));
+            svg.selectAll(".bar").data(record).enter().append("rect").attr("class","bar").attr("x",(d) => x(d.day)-2.5).attr("y",(d) => y(d.pressure)).attr("width",widthbar).attr("height",(d) => height - y(d.pressure) + margin.top).attr("fill","steelblue");
+            svg.append("g").attr("class","x-axis").attr("transform","translate(0," + (margin.top+height) + ")").call(d3.axisBottom(x).ticks(d3.timeDay.every(31)).tickFormat(d3.timeFormat("%y-%m-%d")));
             svg.append("g").attr("class","y-axis").attr("transform","translate(" + margin.left + ",0)").call(d3.axisLeft(y));
        })
 </script>

@@ -12,11 +12,11 @@
     <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;">
         <div>
             <h1>大气压力变化趋势 · 动态更新</h1>
-            <div class="sub">日平均海平面气压 | 柱状条显示提示框</div>
+            <div class="sub">台湾海峡日平均海平面气压</div>
         </div>
     </div>
     <div id="chart"></div>
-    <footer>单位: hPa (百帕) &nbsp;|&nbsp; 鼠标悬停 / 触摸柱子显示详情</footer>
+    <footer>单位: hPa (百帕) &nbsp;</footer>
 </div>
 
 <script>
@@ -83,7 +83,7 @@
         dataPointCircle.attr("cx", cx).attr("cy", cy).classed("visible", true);
     }
 
-    // 显示提示框 (传入数据点和鼠标/触摸坐标)
+    // 显示提示框 (传入数据点和鼠标)
     function showTooltip(dataPoint, clientX, clientY) {
         if (!dataPoint) return;
         const formatDate = d3.timeFormat("%Y年%m月%d日");
@@ -133,27 +133,6 @@
             .on("mouseleave", function() {
                 hideAllInteractions();
             });
-        
-        // 触摸事件（移动端）
-        if (isTouchDevice) {
-            svg.selectAll(".bar")
-                .on("touchstart", function(event, d) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    highlightBar(d);
-                    updateCrosshairAndDot(d);
-                    const touch = event.touches[0];
-                    showTooltip(d, touch.clientX, touch.clientY);
-                })
-                .on("touchmove", function(event, d) {
-                    event.preventDefault();
-                    const touch = event.touches[0];
-                    showTooltip(d, touch.clientX, touch.clientY);
-                })
-                .on("touchend", function() {
-                    hideAllInteractions();
-                });
-        }
     }
 
     // ---------- 核心绘图函数（每次数据更新时调用）----------
@@ -175,7 +154,7 @@
             barWidth = 20;
         }
         
-        // data join
+        // 数据绑定
         const bars = svg.selectAll(".bar").data(currentRecords, d => d.day);
         bars.exit().transition().duration(400).attr("height", 0).attr("y", yScale(0)).remove();
         
@@ -194,11 +173,11 @@
             .attr("x", d => xScale(d.day) - barWidth/2)
             .attr("y", d => yScale(d.pressure))
             .attr("height", d => Math.max(0, margin.top + height - yScale(d.pressure)))
-            .attr("width", (d,i) => i === 0 ? 0:barWidth)
+            .attr("width", barWidth)
             .attr("fill", "steelblue");
         
         // 更新坐标轴
-        const xAxis = d3.axisBottom(xScale).ticks(d3.timeDay.every(4)).tickFormat(d3.timeFormat("%m-%d"));
+        const xAxis = d3.axisBottom(xScale).ticks(d3.timeDay.every(31)).tickFormat(d3.timeFormat("%y-%m-%d"));
         const yAxis = d3.axisLeft(yScale).ticks(6);
         svg.select(".x-axis").transition().duration(600).call(xAxis);
         svg.select(".y-axis").transition().duration(600).call(yAxis);
@@ -261,19 +240,7 @@
         if (!raw || !raw.day || !raw.pressure) throw new Error("数据格式错误");
         initChart(raw);
     }).catch(err => {
-        console.error("加载失败，使用模拟数据", err);
-        const simData = { day: [], pressure: [] };
-        const today = new Date();
-        for (let i = 14; i >= 0; i--) {
-            const d = new Date(); d.setDate(today.getDate() - i);
-            simData.day.push(d.toISOString().slice(0,10));
-            simData.pressure.push(1016 + Math.sin(i)*4 + Math.random()*1.2);
-        }
-        initChart(simData);
-        d3.select("#chart").append("div")
-            .style("text-align","center").style("margin-top","12px")
-            .style("color","#b91c1c").style("font-size","12px")
-            .html("⚠️ 未找到 pressure-day.json，已加载模拟数据。鼠标悬停柱子即可显示提示框。");
+        console.error("加载失败", err);
     });
 </script>
 </body>

@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>高性能柱状图 · Canvas 支持大量数据</title>
+    <title>柱状图</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <link rel="stylesheet" href="new_style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="chart-card">
     <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;">
         <div>
-            <h1>大气压力变化趋势 · Canvas 高性能版</h1>
-            <div class="sub">支持大量数据点 | 鼠标/触摸悬停柱子显示详情</div>
+            <h1>台湾海峡大气压力变化趋势</h1>
+            <div class="sub">支持大量数据点</div>
         </div>
     </div>
     <div id="chart" class="chart-container"></div>
@@ -126,7 +126,7 @@
         for (let i = 0; i < records.length; i += tickInterval) {
             const d = records[i];
             const x = xScale(d.day);
-            const dateLabel = d3.timeFormat("%m-%d")(d.day);
+            const dateLabel = d3.timeFormat("%y-%m-%d")(d.day);
             ctx.fillText(dateLabel, x, margin.top + height + 15);
         }
         // Y轴刻度
@@ -178,7 +178,7 @@
         tooltipDiv.classed("visible", false);
     }
     
-    // 根据鼠标坐标查找最近的柱子索引
+    //根据鼠标坐标查找最近的柱子索引
     function findNearestIndex(clientX, clientY) {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;   // canvas实际像素比
@@ -290,48 +290,22 @@
         currentHighlightIndex = -1;
     }
     
-    // 生成大量模拟数据（用于演示性能）
-    function generateLargeDataset(numPoints = 500) {
-        const today = new Date();
-        const days = [];
-        const pressures = [];
-        for (let i = numPoints - 1; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(today.getDate() - i);
-            days.push(d.toISOString().slice(0,10));
-            // 模拟气压波动
-            const pressure = 1015 + 8 * Math.sin(i * 0.05) + 2 * Math.sin(i * 0.3) + (Math.random() - 0.5) * 1.2;
-            pressures.push(Number(pressure.toFixed(1)));
-        }
-        return { day: days, pressure: pressures };
-    }
     
     // 启动
     initCanvas();
     tooltipDiv = d3.select("body").append("div").attr("class", "tooltip");
     
-    // 尝试加载真实 JSON，如果失败则使用大量模拟数据展示性能
+    // 加载数据
     d3.json("pressure-day.json").then(raw => {
         if (raw && raw.day && raw.pressure && raw.day.length > 0) {
             loadAndDraw(raw);
             // 在 footer 追加数据量提示
-            d3.select("footer").html(`单位: hPa (百帕) &nbsp;|&nbsp; 实际数据点: ${raw.day.length} 个 | Canvas 高性能渲染`);
+            d3.select("footer").html(`单位: hPa (百帕) &nbsp;|&nbsp; 实际数据点: ${raw.day.length} 个`);
         } else {
             throw new Error("数据无效");
         }
     }).catch(err => {
-        console.warn("未找到 pressure-day.json 或数据无效，生成 500 个模拟数据点演示性能", err);
-        const largeData = generateLargeDataset(500);
-        loadAndDraw(largeData);
-        d3.select("footer").html(`单位: hPa (百帕) &nbsp;|&nbsp; ⚠️ 演示模式: 500 个模拟数据点 (Canvas 流畅支持数千点)`);
-        // 可选在图表旁显示提示
-        const msg = document.createElement("div");
-        msg.style.textAlign = "center";
-        msg.style.fontSize = "12px";
-        msg.style.color = "#b91c1c";
-        msg.style.marginTop = "8px";
-        msg.innerText = "⚠️ 未加载到 pressure-day.json，已生成 500 个模拟数据展示 Canvas 性能。";
-        document.querySelector(".chart-card").appendChild(msg);
+        console.warn("未找到 pressure-day.json 或数据无效，", err);
     });
     
     // 窗口尺寸变化时重新绘制（比例尺不变，仅重绘）

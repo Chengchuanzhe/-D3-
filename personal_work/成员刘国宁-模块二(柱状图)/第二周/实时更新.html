@@ -12,7 +12,7 @@
     <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;">
         <div>
             <h1>大气压力变化趋势 · 动态更新</h1>
-            <div class="sub">日平均海平面气压</div>
+            <div class="sub">台湾海峡日平均海平面气压</div>
         </div>
     </div>
     <div id="chart"></div>
@@ -122,12 +122,12 @@
             .attr("y", d => y(d.pressure))
             .attr("height", d => margin.top + height - y(d.pressure))
             .attr("fill", "steelblue")
-            .attr("width",(d,i) => i === 0 ? 0:barWidth);
+            .attr("width", barWidth);
 
         // 5. 更新坐标轴（带过渡）
         const xAxis = d3.axisBottom(x)
-            .ticks(d3.timeDay.every(4))
-            .tickFormat(d3.timeFormat("%m-%d"));
+            .ticks(d3.timeDay.every(31))
+            .tickFormat(d3.timeFormat("%y-%m-%d"));
         const yAxis = d3.axisLeft(y);
 
         svg.select(".x-axis")
