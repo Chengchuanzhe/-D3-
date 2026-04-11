@@ -1,0 +1,204 @@
+<!-- # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2组-程传哲-第二周-协同测试</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试 */
+        body { font-family: "Microsoft YaHei", sans-serif; margin: 20px; background: #f6f9ff; color: #223250; }
+        .box { background: #fff; border: 1px solid #d6def0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+        button { margin-right: 8px; padding: 6px 12px; border: 1px solid #2f80ed; background: #2f80ed; color: #fff; border-radius: 6px; cursor: pointer; }
+        button:hover { background: #1f6fdc; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; margin-left: 6px; }
+        .ok { background: #daf7e8; color: #18794e; }
+        .warn { background: #ffeccc; color: #965d02; }
+        .axis path, .axis line { stroke: #7f8fb0; }
+        .axis text { fill: #42577f; font-size: 12px; }
+        .bar { fill: #2f80ed; }
+        .line { fill: none; stroke: #e67e22; stroke-width: 2.3; }
+        .point { fill: #16a085; stroke: #fff; stroke-width: 1.2; }
+        #tip { position: absolute; pointer-events: none; background: rgba(10,20,40,0.9); color: #fff; font-size: 12px; padding: 6px 8px; border-radius: 6px; display: none; }
+        /* # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试end */
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>协助测试：图表更新效果同步校验</h2>
+        <p>目标：配合模块2/3测试数据更新后，图元、坐标轴与 Tooltip 是否同步更新。</p>
+        <button id="btnM2">加载模块2更新数据</button>
+        <button id="btnM3">加载模块3更新数据</button>
+        <button id="btnReset">重置到基准数据</button>
+        <div style="margin-top:8px;">
+            当前数据源：<strong id="sourceLabel">基准</strong>
+            <span id="syncBadge" class="badge warn">待验证</span>
+        </div>
+    </div>
+
+    <div class="box">
+        <h3>柱状图更新验证</h3>
+        <div id="barWrap"></div>
+    </div>
+
+    <div class="box">
+        <h3>折线图更新验证</h3>
+        <div id="lineWrap"></div>
+    </div>
+
+    <div class="box">
+        <h3>自动校验输出</h3>
+        <ol id="resultList"></ol>
+    </div>
+
+    <div id="tip"></div>
+
+    <script>
+        // # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试
+        const payloads = {
+            base: {
+                source: "基准",
+                bar: [
+                    { name: "东海", v: 20 }, { name: "南海", v: 34 }, { name: "黄海", v: 27 }, { name: "渤海", v: 16 }
+                ],
+                line: [
+                    { t: "2024-01-01", y: 11.2 }, { t: "2024-01-03", y: 11.6 }, { t: "2024-01-05", y: 12.0 }, { t: "2024-01-07", y: 12.3 }
+                ]
+            },
+            m2: {
+                source: "模块2-更新",
+                bar: [
+                    { name: "东海", v: 23 }, { name: "南海", v: 38 }, { name: "黄海", v: 25 }, { name: "渤海", v: 19 }
+                ],
+                line: [
+                    { t: "2024-01-01", y: 10.9 }, { t: "2024-01-03", y: 11.4 }, { t: "2024-01-05", y: 11.8 }, { t: "2024-01-07", y: 12.2 }
+                ]
+            },
+            m3: {
+                source: "模块3-更新",
+                bar: [
+                    { name: "东海", v: 29 }, { name: "南海", v: 31 }, { name: "黄海", v: 30 }, { name: "渤海", v: 21 }
+                ],
+                line: [
+                    { t: "2024-01-01", y: 12.0 }, { t: "2024-01-03", y: 12.2 }, { t: "2024-01-05", y: 12.6 }, { t: "2024-01-07", y: 13.0 }
+                ]
+            }
+        };
+
+        const parseDate = d3.timeParse("%Y-%m-%d");
+        const tip = d3.select("#tip");
+        const resultList = d3.select("#resultList");
+        const sourceLabel = d3.select("#sourceLabel");
+        const syncBadge = d3.select("#syncBadge");
+
+        const barW = 720, barH = 280, barM = { top: 10, right: 16, bottom: 40, left: 50 };
+        const lineW = 720, lineH = 280, lineM = { top: 10, right: 16, bottom: 40, left: 50 };
+
+        const bsvg = d3.select("#barWrap").append("svg").attr("width", barW).attr("height", barH);
+        const lsvg = d3.select("#lineWrap").append("svg").attr("width", lineW).attr("height", lineH);
+
+        const bg = bsvg.append("g").attr("transform", `translate(${barM.left},${barM.top})`);
+        const lg = lsvg.append("g").attr("transform", `translate(${lineM.left},${lineM.top})`);
+        const bw = barW - barM.left - barM.right;
+        const bh = barH - barM.top - barM.bottom;
+        const lw = lineW - lineM.left - lineM.right;
+        const lh = lineH - lineM.top - lineM.bottom;
+
+        const bxg = bg.append("g").attr("class", "axis").attr("transform", `translate(0,${bh})`);
+        const byg = bg.append("g").attr("class", "axis");
+        const lxg = lg.append("g").attr("class", "axis").attr("transform", `translate(0,${lh})`);
+        const lyg = lg.append("g").attr("class", "axis");
+
+        const barLayer = bg.append("g");
+        const linePath = lg.append("path").attr("class", "line");
+        const pointLayer = lg.append("g");
+
+        function showTip(event, txt) {
+            tip.style("display", "block")
+                .style("left", `${event.pageX + 10}px`)
+                .style("top", `${event.pageY - 16}px`)
+                .html(txt);
+        }
+
+        function moveTip(event) {
+            tip.style("left", `${event.pageX + 10}px`).style("top", `${event.pageY - 16}px`);
+        }
+
+        function hideTip() { tip.style("display", "none"); }
+
+        function runChecks(data) {
+            const checks = [];
+            const barCount = barLayer.selectAll(".bar").size();
+            checks.push({ ok: barCount === data.bar.length, msg: `柱体数量 ${barCount}/${data.bar.length}` });
+            const pointCount = pointLayer.selectAll(".point").size();
+            checks.push({ ok: pointCount === data.line.length, msg: `折线点数量 ${pointCount}/${data.line.length}` });
+            const hasAxisTicks = bxg.selectAll(".tick").size() > 0 && lxg.selectAll(".tick").size() > 0;
+            checks.push({ ok: hasAxisTicks, msg: "坐标轴刻度已刷新" });
+
+            const allOk = checks.every(c => c.ok);
+            syncBadge.text(allOk ? "同步通过" : "存在异常")
+                .attr("class", `badge ${allOk ? "ok" : "warn"}`);
+
+            resultList.selectAll("li")
+                .data(checks)
+                .join("li")
+                .text(d => `${d.ok ? "PASS" : "FAIL"} - ${d.msg}`);
+        }
+
+        function render(payload) {
+            sourceLabel.text(payload.source);
+            const barData = payload.bar;
+            const lineData = payload.line.map(d => ({ ...d, p: parseDate(d.t) }));
+
+            const x = d3.scaleBand().domain(barData.map(d => d.name)).range([0, bw]).padding(0.25);
+            const y = d3.scaleLinear().domain([0, d3.max(barData, d => d.v) + 8]).nice().range([bh, 0]);
+            bxg.call(d3.axisBottom(x));
+            byg.call(d3.axisLeft(y));
+
+            const bars = barLayer.selectAll(".bar")
+                .data(barData, d => d.name)
+                .join("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.name))
+                .attr("width", x.bandwidth())
+                .attr("y", d => y(d.v))
+                .attr("height", d => bh - y(d.v));
+
+            bars.on("mouseenter", (e, d) => showTip(e, `${d.name}<br/>值: ${d.v}`))
+                .on("mousemove", moveTip)
+                .on("mouseleave", hideTip);
+
+            const lx = d3.scaleTime().domain(d3.extent(lineData, d => d.p)).range([0, lw]);
+            const ly = d3.scaleLinear().domain([d3.min(lineData, d => d.y) - 1, d3.max(lineData, d => d.y) + 1]).nice().range([lh, 0]);
+            lxg.call(d3.axisBottom(lx).ticks(4));
+            lyg.call(d3.axisLeft(ly).ticks(5));
+
+            const line = d3.line().x(d => lx(d.p)).y(d => ly(d.y));
+            linePath.datum(lineData).attr("d", line);
+
+            const points = pointLayer.selectAll(".point")
+                .data(lineData, d => d.t)
+                .join("circle")
+                .attr("class", "point")
+                .attr("r", 4)
+                .attr("cx", d => lx(d.p))
+                .attr("cy", d => ly(d.y));
+
+            points.on("mouseenter", (e, d) => showTip(e, `${d.t}<br/>值: ${d.y}`))
+                .on("mousemove", moveTip)
+                .on("mouseleave", hideTip);
+
+            runChecks(payload);
+        }
+
+        d3.select("#btnM2").on("click", () => render(payloads.m2));
+        d3.select("#btnM3").on("click", () => render(payloads.m3));
+        d3.select("#btnReset").on("click", () => render(payloads.base));
+
+        render(payloads.base);
+        // # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试end
+    </script>
+</body>
+</html>
+<!-- # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试end -->

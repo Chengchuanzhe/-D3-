@@ -1,0 +1,207 @@
+<!-- # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2组-程传哲-第二周-协同测试-真实数据对齐</title>
+    <style>
+        /* # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试 */
+        body { margin: 20px; font-family: "Microsoft YaHei", sans-serif; color: #1f2d4d; background: #f5f8ff; }
+        .card { background: #fff; border: 1px solid #d6deef; border-radius: 10px; padding: 14px; max-width: 1020px; }
+        h1 { margin: 0 0 10px 0; font-size: 22px; }
+        p { margin: 0 0 10px 0; color: #4d6084; }
+        .hint { padding: 10px 12px; border-radius: 8px; margin: 10px 0; font-size: 14px; }
+        .hint.info { background: #e9f2ff; color: #1d4f9b; border: 1px solid #c6dbff; }
+        .hint.err { background: #ffecec; color: #9f1f1f; border: 1px solid #f5c2c2; }
+        button { padding: 8px 14px; border: 1px solid #2f80ed; background: #2f80ed; color: #fff; border-radius: 7px; cursor: pointer; }
+        button:hover { background: #1f6fdc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+        th, td { border: 1px solid #dbe3f2; padding: 8px; text-align: left; vertical-align: top; }
+        th { background: #eef4ff; }
+        .pass { color: #147a4b; font-weight: 700; }
+        .fail { color: #b42318; font-weight: 700; }
+        code { background: #eef2fb; padding: 2px 6px; border-radius: 5px; }
+        .mono { font-family: Consolas, "Courier New", monospace; }
+        /* # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试end */
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>协同测试：真实数据对齐校验</h1>
+        <p>范围：读取成员1数据治理成果 + 成员2柱状图更新数据 + 其他成员日志文件，验证“图表更新协同链路”可对齐。</p>
+        <button id="runBtn" type="button">执行协同测试</button>
+        <div id="runtimeHint" class="hint info">运行环境检测中...</div>
+        <div id="summary" style="margin-top:10px;"></div>
+        <table>
+            <thead>
+                <tr>
+                    <th>检查项</th>
+                    <th>结果</th>
+                    <th>细节</th>
+                </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试
+        const rowsEl = document.getElementById("rows");
+        const summaryEl = document.getElementById("summary");
+        const hintEl = document.getElementById("runtimeHint");
+
+        function rowItem(name, ok, detail) {
+            return { name, ok, detail };
+        }
+
+        function renderRows(rows) {
+            rowsEl.innerHTML = rows.map(d => `
+                <tr>
+                    <td>${d.name}</td>
+                    <td class="${d.ok ? "pass" : "fail"}">${d.ok ? "PASS" : "FAIL"}</td>
+                    <td class="mono">${d.detail}</td>
+                </tr>
+            `).join("");
+
+            const passCount = rows.filter(r => r.ok).length;
+            summaryEl.innerHTML = `总计 <code>${rows.length}</code> 项，PASS <code>${passCount}</code> 项。`;
+        }
+
+        function setHint(text, isError) {
+            hintEl.textContent = text;
+            hintEl.className = `hint ${isError ? "err" : "info"}`;
+        }
+
+        function resolveUrl(path) {
+            if (path.startsWith("http://") || path.startsWith("https://")) {
+                return path;
+            }
+            if (path.startsWith("/")) {
+                return `${window.location.origin}${path}`;
+            }
+            return new URL(path, window.location.href).href;
+        }
+
+        async function fetchTextCandidates(label, candidates) {
+            const errors = [];
+            for (const p of candidates) {
+                const url = resolveUrl(p);
+                try {
+                    const res = await fetch(url, { cache: "no-store" });
+                    if (!res.ok) {
+                        throw new Error(`HTTP ${res.status}`);
+                    }
+                    const text = await res.text();
+                    return { text, from: url };
+                } catch (err) {
+                    errors.push(`${url} -> ${String(err.message || err)}`);
+                }
+            }
+            throw new Error(`${label} 全部路径读取失败: ${errors.join(" | ")}`);
+        }
+
+        async function fetchJsonCandidates(label, candidates) {
+            const errors = [];
+            for (const p of candidates) {
+                const url = resolveUrl(p);
+                try {
+                    const res = await fetch(url, { cache: "no-store" });
+                    if (!res.ok) {
+                        throw new Error(`HTTP ${res.status}`);
+                    }
+                    const json = await res.json();
+                    return { json, from: url };
+                } catch (err) {
+                    errors.push(`${url} -> ${String(err.message || err)}`);
+                }
+            }
+            throw new Error(`${label} 全部路径读取失败: ${errors.join(" | ")}`);
+        }
+
+        async function runTests() {
+            const result = [];
+
+            if (window.location.protocol === "file:") {
+                setHint("当前是 file:// 打开，浏览器会拦截本地 fetch。请改用 http://127.0.0.1:5500 打开本页。", true);
+                renderRows([rowItem("运行方式检查", false, "检测到 file://，fetch 被浏览器安全策略拦截。")]);
+                return;
+            }
+
+            setHint(`当前页面地址：${window.location.href}`, false);
+
+            try {
+                const lg2Resp = await fetchTextCandidates("成员2日志", [
+                    "/Doc/%E4%B8%AA%E4%BA%BA%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97%E5%90%88%E9%9B%86/2%E7%BB%84-%E5%88%98%E5%9B%BD%E5%AE%81-%E4%B8%AA%E4%BA%BA%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97.txt",
+                    "../../../Doc/个人开发日志合集/2组-刘国宁-个人开发日志.txt"
+                ]);
+
+                const lg1Resp = await fetchTextCandidates("成员1日志", [
+                    "/Doc/%E4%B8%AA%E4%BA%BA%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97%E5%90%88%E9%9B%86/2%E7%BB%84-%E7%8E%8B%E5%93%B2-%E4%B8%AA%E4%BA%BA%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97.txt",
+                    "../../../Doc/个人开发日志合集/2组-王哲-个人开发日志.txt"
+                ]);
+
+                const dataResp = await fetchJsonCandidates("成员1主数据", [
+                    "/Data.json",
+                    "../../../Data.json"
+                ]);
+
+                const pResp = await fetchJsonCandidates("成员2更新数据", [
+                    "/personal_work/%E6%88%90%E5%91%98%E5%88%98%E5%9B%BD%E5%AE%81-%E6%A8%A1%E5%9D%97%E4%BA%8C(%E6%9F%B1%E7%8A%B6%E5%9B%BE)/%E7%AC%AC%E4%BA%8C%E5%91%A8/pressure-day.json",
+                    "../../成员刘国宁-模块二(柱状图)/第二周/pressure-day.json"
+                ]);
+
+                const lg2 = lg2Resp.text;
+                const lg1 = lg1Resp.text;
+                const dataMain = dataResp.json;
+                const pressureDay = pResp.json;
+
+                result.push(rowItem("成员2日志读取", typeof lg2 === "string" && lg2.length > 100, `长度 ${lg2.length}，来源 ${lg2Resp.from}`));
+                result.push(rowItem("成员1日志读取", typeof lg1 === "string" && lg1.length > 100, `长度 ${lg1.length}，来源 ${lg1Resp.from}`));
+
+                const dataRows = Array.isArray(dataMain) ? dataMain.length : 0;
+                result.push(rowItem("成员1主数据可读取", dataRows > 0, `Data.json 记录数 ${dataRows}，来源 ${dataResp.from}`));
+
+                const fieldOk = dataRows > 0 && ["date", "pressure", "region_name"].every(k => Object.prototype.hasOwnProperty.call(dataMain[0], k));
+                result.push(rowItem("成员1主数据关键字段", fieldOk, fieldOk ? "包含 date / pressure / region_name" : "字段缺失"));
+
+                const dayLen = Array.isArray(pressureDay.day) ? pressureDay.day.length : 0;
+                const pLen = Array.isArray(pressureDay.pressure) ? pressureDay.pressure.length : 0;
+                result.push(rowItem("成员2更新数据结构", dayLen > 0 && dayLen === pLen, `day=${dayLen}, pressure=${pLen}，来源 ${pResp.from}`));
+
+                const regionData = dataMain
+                    .filter(d => d.region_name === "台湾海峡")
+                    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+                const mapMain = new Map(regionData.map(d => [String(d.date), Number(d.pressure)]));
+
+                let missDate = 0;
+                let mismatch = 0;
+                for (let i = 0; i < dayLen; i += 1) {
+                    const day = String(pressureDay.day[i]);
+                    const pv = Number(pressureDay.pressure[i]);
+                    if (!mapMain.has(day)) {
+                        missDate += 1;
+                        continue;
+                    }
+                    const mv = Number(mapMain.get(day));
+                    if (Math.abs(mv - pv) > 1e-9) {
+                        mismatch += 1;
+                    }
+                }
+
+                result.push(rowItem("成员1/成员2日期集合对齐", missDate === 0, `缺失日期 ${missDate}`));
+                result.push(rowItem("成员1/成员2压力值一致", mismatch === 0, `压力不一致条数 ${mismatch}`));
+            } catch (err) {
+                result.push(rowItem("协同测试执行", false, String(err.message || err)));
+            }
+
+            renderRows(result);
+        }
+
+        document.getElementById("runBtn").addEventListener("click", runTests);
+        setHint(`当前页面地址：${window.location.href}`, window.location.protocol === "file:");
+        // # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试end
+    </script>
+</body>
+</html>
+<!-- # 2组 - 程传哲 - 第二周 - 协助图表更新效果协同测试end -->
