@@ -1,0 +1,286 @@
+<!-- # 2组 - 程传哲 - 第二周 - 基础样式适配 + Tooltip初步适配 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2组-程传哲-第二周-样式适配与Tooltip</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <main class="page">
+        <header class="header">
+            <h1>第2周：基础样式适配 + Tooltip 初步适配</h1>
+            <p>模块4（程传哲）个人实现：统一样式、Tooltip 组件、图表更新验证。</p>
+            <button id="switchDataBtn" type="button">切换数据场景（验证更新）</button>
+        </header>
+
+        <section class="panel">
+            <h2>柱状图（基础样式适配 + Tooltip）</h2>
+            <div id="barChart"></div>
+        </section>
+
+        <section class="panel">
+            <h2>折线图（基础样式适配 + Tooltip）</h2>
+            <div id="lineChart"></div>
+        </section>
+    </main>
+
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <script>
+        // # 2组 - 程传哲 - 第二周 - 基础样式适配 + Tooltip初步适配
+        console.log("D3.js loaded:", d3.version);
+
+        const scenarios = [
+            {
+                name: "场景A",
+                bar: [
+                    { region: "东海", value: 31 },
+                    { region: "南海", value: 44 },
+                    { region: "黄海", value: 26 },
+                    { region: "渤海", value: 18 }
+                ],
+                line: [
+                    { date: "2024-01-01", temp_air: 6, temp_sea: 11 },
+                    { date: "2024-01-03", temp_air: 7, temp_sea: 11.5 },
+                    { date: "2024-01-05", temp_air: 8, temp_sea: 12 },
+                    { date: "2024-01-07", temp_air: 7.5, temp_sea: 12.2 },
+                    { date: "2024-01-09", temp_air: 8.3, temp_sea: 12.7 },
+                    { date: "2024-01-11", temp_air: 9.1, temp_sea: 13.1 }
+                ]
+            },
+            {
+                name: "场景B",
+                bar: [
+                    { region: "东海", value: 35 },
+                    { region: "南海", value: 40 },
+                    { region: "黄海", value: 28 },
+                    { region: "渤海", value: 22 }
+                ],
+                line: [
+                    { date: "2024-01-01", temp_air: 5.6, temp_sea: 10.7 },
+                    { date: "2024-01-03", temp_air: 6.4, temp_sea: 11.1 },
+                    { date: "2024-01-05", temp_air: 7.2, temp_sea: 11.5 },
+                    { date: "2024-01-07", temp_air: 8.1, temp_sea: 11.9 },
+                    { date: "2024-01-09", temp_air: 8.9, temp_sea: 12.5 },
+                    { date: "2024-01-11", temp_air: 9.6, temp_sea: 12.9 }
+                ]
+            }
+        ];
+
+        const parseDate = d3.timeParse("%Y-%m-%d");
+        scenarios.forEach(s => {
+            s.line = s.line.map(d => ({ ...d, parsedDate: parseDate(d.date) }));
+        });
+
+        const tooltip = d3.select("#tooltip");
+
+        function showTooltip(event, html) {
+            tooltip
+                .html(html)
+                .classed("hidden", false)
+                .style("left", `${event.pageX + 14}px`)
+                .style("top", `${event.pageY - 18}px`);
+        }
+
+        function moveTooltip(event) {
+            tooltip
+                .style("left", `${event.pageX + 14}px`)
+                .style("top", `${event.pageY - 18}px`);
+        }
+
+        function hideTooltip() {
+            tooltip.classed("hidden", true);
+        }
+
+        const barConfig = { width: 760, height: 320, margin: { top: 24, right: 20, bottom: 50, left: 56 } };
+        const lineConfig = { width: 760, height: 320, margin: { top: 24, right: 20, bottom: 50, left: 56 } };
+
+        const barSvg = d3.select("#barChart")
+            .append("svg")
+            .attr("width", barConfig.width)
+            .attr("height", barConfig.height);
+
+        const lineSvg = d3.select("#lineChart")
+            .append("svg")
+            .attr("width", lineConfig.width)
+            .attr("height", lineConfig.height);
+
+        const barInner = barSvg.append("g")
+            .attr("transform", `translate(${barConfig.margin.left},${barConfig.margin.top})`);
+        const lineInner = lineSvg.append("g")
+            .attr("transform", `translate(${lineConfig.margin.left},${lineConfig.margin.top})`);
+
+        const barW = barConfig.width - barConfig.margin.left - barConfig.margin.right;
+        const barH = barConfig.height - barConfig.margin.top - barConfig.margin.bottom;
+        const lineW = lineConfig.width - lineConfig.margin.left - lineConfig.margin.right;
+        const lineH = lineConfig.height - lineConfig.margin.top - lineConfig.margin.bottom;
+
+        const barXAxisGroup = barInner.append("g").attr("class", "axis").attr("transform", `translate(0,${barH})`);
+        const barYAxisGroup = barInner.append("g").attr("class", "axis");
+        const lineXAxisGroup = lineInner.append("g").attr("class", "axis").attr("transform", `translate(0,${lineH})`);
+        const lineYAxisGroup = lineInner.append("g").attr("class", "axis");
+
+        barSvg.append("text")
+            .attr("class", "chart-label")
+            .attr("x", 16)
+            .attr("y", 20)
+            .text("单位：区域样本数");
+
+        lineSvg.append("text")
+            .attr("class", "chart-label")
+            .attr("x", 16)
+            .attr("y", 20)
+            .text("单位：温度（°C）");
+
+        lineSvg.append("text")
+            .attr("class", "legend legend-air")
+            .attr("x", lineConfig.width - 170)
+            .attr("y", 22)
+            .text("空气温度");
+
+        lineSvg.append("text")
+            .attr("class", "legend legend-sea")
+            .attr("x", lineConfig.width - 80)
+            .attr("y", 22)
+            .text("海表温度");
+
+        const barLayer = barInner.append("g");
+        const linePathLayer = lineInner.append("g");
+        const linePointLayer = lineInner.append("g");
+
+        let sceneIndex = 0;
+
+        function renderBar(data) {
+            const x = d3.scaleBand()
+                .domain(data.map(d => d.region))
+                .range([0, barW])
+                .padding(0.25);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.value) + 8])
+                .nice()
+                .range([barH, 0]);
+
+            barXAxisGroup.transition().duration(450).call(d3.axisBottom(x));
+            barYAxisGroup.transition().duration(450).call(d3.axisLeft(y).ticks(6));
+
+            const bars = barLayer.selectAll(".bar")
+                .data(data, d => d.region)
+                .join(
+                    enter => enter.append("rect")
+                        .attr("class", "bar")
+                        .attr("x", d => x(d.region))
+                        .attr("width", x.bandwidth())
+                        .attr("y", barH)
+                        .attr("height", 0),
+                    update => update,
+                    exit => exit.transition().duration(300).attr("height", 0).attr("y", barH).remove()
+                );
+
+            bars.transition().duration(450)
+                .attr("x", d => x(d.region))
+                .attr("width", x.bandwidth())
+                .attr("y", d => y(d.value))
+                .attr("height", d => barH - y(d.value));
+
+            bars
+                .on("mouseenter", function (event, d) {
+                    d3.select(this).classed("bar-hover", true);
+                    showTooltip(event, `<strong>${d.region}</strong><br/>样本值：${d.value}`);
+                })
+                .on("mousemove", moveTooltip)
+                .on("mouseleave", function () {
+                    d3.select(this).classed("bar-hover", false);
+                    hideTooltip();
+                });
+        }
+
+        function renderLine(data) {
+            const x = d3.scaleTime()
+                .domain(d3.extent(data, d => d.parsedDate))
+                .range([0, lineW]);
+
+            const y = d3.scaleLinear()
+                .domain([
+                    d3.min(data, d => Math.min(d.temp_air, d.temp_sea)) - 1,
+                    d3.max(data, d => Math.max(d.temp_air, d.temp_sea)) + 1
+                ])
+                .nice()
+                .range([lineH, 0]);
+
+            lineXAxisGroup.transition().duration(450).call(d3.axisBottom(x).ticks(6));
+            lineYAxisGroup.transition().duration(450).call(d3.axisLeft(y).ticks(6));
+
+            const lineAir = d3.line()
+                .x(d => x(d.parsedDate))
+                .y(d => y(d.temp_air));
+
+            const lineSea = d3.line()
+                .x(d => x(d.parsedDate))
+                .y(d => y(d.temp_sea));
+
+            const series = [
+                { key: "air", className: "line-air", values: data, lineFn: lineAir },
+                { key: "sea", className: "line-sea", values: data, lineFn: lineSea }
+            ];
+
+            const lines = linePathLayer.selectAll(".line-path")
+                .data(series, d => d.key)
+                .join("path")
+                .attr("class", d => `line-path ${d.className}`);
+
+            lines.transition().duration(450).attr("d", d => d.lineFn(d.values));
+
+            const pointsData = data.flatMap(d => ([
+                { type: "air", date: d.date, parsedDate: d.parsedDate, value: d.temp_air },
+                { type: "sea", date: d.date, parsedDate: d.parsedDate, value: d.temp_sea }
+            ]));
+
+            const points = linePointLayer.selectAll(".line-point")
+                .data(pointsData, d => `${d.type}-${d.date}`)
+                .join(
+                    enter => enter.append("circle")
+                        .attr("class", d => `line-point point-${d.type}`)
+                        .attr("r", 0),
+                    update => update,
+                    exit => exit.transition().duration(300).attr("r", 0).remove()
+                );
+
+            points.transition().duration(450)
+                .attr("cx", d => x(d.parsedDate))
+                .attr("cy", d => y(d.value))
+                .attr("r", 4.3);
+
+            points
+                .on("mouseenter", function (event, d) {
+                    d3.select(this).classed("point-hover", true);
+                    const label = d.type === "air" ? "空气温度" : "海表温度";
+                    showTooltip(event, `<strong>${label}</strong><br/>日期：${d.date}<br/>值：${d.value}°C`);
+                })
+                .on("mousemove", moveTooltip)
+                .on("mouseleave", function () {
+                    d3.select(this).classed("point-hover", false);
+                    hideTooltip();
+                });
+        }
+
+        function renderScene(scene) {
+            renderBar(scene.bar);
+            renderLine(scene.line);
+            d3.select("#switchDataBtn").text(`切换数据场景（当前：${scene.name}）`);
+        }
+
+        renderScene(scenarios[sceneIndex]);
+
+        d3.select("#switchDataBtn").on("click", () => {
+            sceneIndex = sceneIndex === 0 ? 1 : 0;
+            renderScene(scenarios[sceneIndex]);
+        });
+        // # 2组 - 程传哲 - 第二周 - 基础样式适配 + Tooltip初步适配end
+    </script>
+</body>
+</html>
+<!-- # 2组 - 程传哲 - 第二周 - 基础样式适配 + Tooltip初步适配end -->

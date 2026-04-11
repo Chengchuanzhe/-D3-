@@ -1,0 +1,164 @@
+/* # 2组 - 程传哲 - 第二周 - 基础样式适配 + Tooltip初步适配 */
+:root {
+    --bg: #f4f7fb;
+    --panel-bg: #ffffff;
+    --ink: #24324d;
+    --sub-ink: #4f648b;
+    --line-axis: #8797b8;
+    --bar: #2f80ed;
+    --bar-hover: #1f6fdc;
+    --air: #e67e22;
+    --sea: #16a085;
+    --tooltip-bg: rgba(15, 29, 56, 0.94);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+}
+
+.page {
+    max-width: 900px;
+    margin: 0 auto;
+    display: grid;
+    gap: 14px;
+}
+
+.header {
+    background: var(--panel-bg);
+    border: 1px solid #d5def0;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+h1 {
+    margin: 0 0 8px 0;
+    font-size: 24px;
+}
+
+h2 {
+    margin: 0 0 8px 0;
+    font-size: 19px;
+    color: #2e3f66;
+}
+
+p {
+    margin: 0 0 12px 0;
+    color: var(--sub-ink);
+}
+
+button {
+    border: 1px solid #2f80ed;
+    background: #2f80ed;
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+button:hover {
+    background: #1f6fdc;
+}
+
+.panel {
+    background: var(--panel-bg);
+    border: 1px solid #d5def0;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+.chart-label {
+    fill: var(--sub-ink);
+    font-size: 12px;
+}
+
+.legend {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.legend-air {
+    fill: var(--air);
+}
+
+.legend-sea {
+    fill: var(--sea);
+}
+
+.axis path,
+.axis line {
+    stroke: var(--line-axis);
+}
+
+.axis text {
+    fill: #415579;
+    font-size: 12px;
+}
+
+.bar {
+    fill: var(--bar);
+    opacity: 0.92;
+}
+
+.bar-hover {
+    fill: var(--bar-hover);
+    opacity: 1;
+}
+
+.line-path {
+    fill: none;
+    stroke-width: 2.6;
+}
+
+.line-air {
+    stroke: var(--air);
+}
+
+.line-sea {
+    stroke: var(--sea);
+}
+
+.line-point {
+    stroke: #fff;
+    stroke-width: 1.2;
+}
+
+.point-air {
+    fill: var(--air);
+}
+
+.point-sea {
+    fill: var(--sea);
+}
+
+.point-hover {
+    r: 6;
+}
+
+.tooltip {
+    position: absolute;
+    z-index: 10;
+    min-width: 130px;
+    max-width: 220px;
+    color: #fff;
+    background: var(--tooltip-bg);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    pointer-events: none;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+}
+
+.hidden {
+    display: none;
+}
+/* # 2组 - 程传哲 - 第二周 - 基础样式适配 + Tooltip初步适配end */
