@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>柱状图</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="chart-card">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;">
+        <div>
+            <h1>台湾海峡大气压力变化趋势</h1>
+            <div class="sub">支持大量数据点</div>
+        </div>
+    </div>
+    <div id="chart" class="chart-container"></div>
+    <footer>单位: hPa (百帕) &nbsp;|&nbsp; 可处理数千个数据点，流畅交互</footer>
+</div>
+
+<script>
+    // ---------- 全局变量 ----------
+    let records = [];            // [{day, pressure}] 原始数据
+    let margin, width, height, canvasWidth, canvasHeight;
+    let xScale, yScale;
+    let tooltipDiv;
+    let canvas, ctx;
+    let isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    let currentHighlightIndex = -1;   // 当前高亮的数据索引
+    
+    // 比例尺更新
+    function updateScales() {
+        if (!records.length) return;
+        xScale.domain(d3.extent(records, d => d.day));
+        const pressures = records.map(d => d.pressure);
+        yScale.domain([d3.min(pressures) - 2, d3.max(pressures) + 1]);
+    }
+    
+    // 绘制所有柱子（可选高亮某个索引）
+    function drawBars(highlightIndex = -1) {
+        if (!ctx || !records.length) return;
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        
+        // 计算柱宽（基于第一个和第二点的像素距离，避免过密）
+        let barWidth = 4;
+        if (records.length >= 2) {
+            const pixelDist = Math.abs(xScale(records[1].day) - xScale(records[0].day));
+            // 限制最小1px，最大12px，防止过宽或过窄
+            barWidth = Math.max(1, Math.min(12, pixelDist * 0.7));
+        }
+        
+        // 绘制网格线（Y方向）和 坐标轴（简化，但保留美观）
+        ctx.save();
+        ctx.strokeStyle = "#e2e9f0";
+        ctx.lineWidth = 0.8;
+        ctx.setLineDash([4, 4]);
+        const yTicks = yScale.ticks(6);
+        yTicks.forEach(tick => {
+            const y = yScale(tick);
+            if (y >= margin.top && y <= margin.top + height) {
+                ctx.beginPath();
+                ctx.moveTo(margin.left, y);
+                ctx.lineTo(margin.left + width, y);
+                ctx.stroke();
+            }
+        });
+        ctx.setLineDash([]);
+        
+        // 绘制柱子
+        for (let i = 0; i < records.length; i++) {
+            const d = records[i];
+            const x = xScale(d.day) - barWidth / 2;
+            const y = yScale(d.pressure);
+            const barHeight = margin.top + height - y;
+            if (barHeight <= 0) continue;
+            
+            // 高亮选中的柱子
+            if (i === highlightIndex) {
+                ctx.fillStyle = "#f97316";
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = "rgba(249,115,22,0.5)";
+            } else {
+                ctx.fillStyle = "steelblue";
+                ctx.shadowBlur = 2;
+                ctx.shadowColor = "rgba(0,0,0,0.1)";
+            }
+            ctx.fillRect(x, y, barWidth, barHeight);
+        }
+        ctx.shadowBlur = 0;
+        
+        // 绘制十字准星（如果高亮某个点）
+        if (highlightIndex >= 0 && highlightIndex < records.length) {
+            const d = records[highlightIndex];
+            const cx = xScale(d.day);
+            const cy = yScale(d.pressure);
+            ctx.beginPath();
+            ctx.strokeStyle = "#f97316";
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 5]);
+            // 竖线
+            ctx.moveTo(cx, margin.top);
+            ctx.lineTo(cx, margin.top + height);
+            // 横线
+            ctx.moveTo(margin.left, cy);
+            ctx.lineTo(margin.left + width, cy);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // 绘制数据点标记
+            ctx.beginPath();
+            ctx.fillStyle = "#f97316";
+            ctx.arc(cx, cy, 5, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+        
+        // 绘制坐标轴（简单但清晰）
+        ctx.fillStyle = "#2c3e44";
+        ctx.font = "11px 'Segoe UI', Roboto";
+        ctx.textAlign = "center";
+        // X轴刻度（每隔几个点显示，避免过密）
+        const tickInterval = Math.max(1, Math.floor(records.length / 8));
+        for (let i = 0; i < records.length; i += tickInterval) {
+            const d = records[i];
+            const x = xScale(d.day);
+            const dateLabel = d3.timeFormat("%y-%m-%d")(d.day);
+            ctx.fillText(dateLabel, x, margin.top + height + 15);
+        }
+        // Y轴刻度
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        yTicks.forEach(tick => {
+            const y = yScale(tick);
+            ctx.fillText(tick.toFixed(0), margin.left - 8, y);
+        });
+        // 轴线条
+        ctx.beginPath();
+        ctx.strokeStyle = "#a0b3c9";
+        ctx.lineWidth = 1.2;
+        ctx.moveTo(margin.left, margin.top);
+        ctx.lineTo(margin.left, margin.top + height);
+        ctx.moveTo(margin.left, margin.top + height);
+        ctx.lineTo(margin.left + width, margin.top + height);
+        ctx.stroke();
+    }
+    
+    // 显示提示框
+    function showTooltipForIndex(index, clientX, clientY) {
+        if (index < 0 || index >= records.length) return;
+        const d = records[index];
+        const formatDate = d3.timeFormat("%Y年%m月%d日");
+        tooltipDiv.html(`
+            <div class="tooltip-date">📅 ${formatDate(d.day)}</div>
+            <div>
+                <span class="tooltip-value">${d.pressure.toFixed(1)}</span>
+                <span class="tooltip-unit">hPa</span>
+            </div>
+        `);
+        const tooltipNode = tooltipDiv.node();
+        const tooltipRect = tooltipNode.getBoundingClientRect();
+        let left = clientX - tooltipRect.width / 2;
+        let top = clientY - tooltipRect.height - 18;
+        if (left < 8) left = 8;
+        if (left + tooltipRect.width > window.innerWidth - 8) {
+            left = window.innerWidth - tooltipRect.width - 8;
+        }
+        if (top < 10) top = clientY + 20;
+        if (top + tooltipRect.height > window.innerHeight - 10) {
+            top = window.innerHeight - tooltipRect.height - 10;
+        }
+        tooltipDiv.style("left", left + "px").style("top", top + "px").classed("visible", true);
+    }
+    
+    function hideTooltip() {
+        tooltipDiv.classed("visible", false);
+    }
+    
+    //根据鼠标坐标查找最近的柱子索引
+    function findNearestIndex(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;   // canvas实际像素比
+        const scaleY = canvas.height / rect.height;
+        const canvasX = (clientX - rect.left) * scaleX;
+        const canvasY = (clientY - rect.top) * scaleY;
+        if (canvasX < margin.left || canvasX > margin.left + width ||
+            canvasY < margin.top || canvasY > margin.top + height) {
+            return -1;
+        }
+        // 将 canvasX 映射到日期
+        const xDate = xScale.invert(canvasX);
+        const bisect = d3.bisector(d => d.day).left;
+        const idx = bisect(records, xDate, 1);
+        let nearestIdx = 0;
+        if (idx === 0) nearestIdx = 0;
+        else if (idx >= records.length) nearestIdx = records.length - 1;
+        else {
+            const leftDist = Math.abs(xDate - records[idx-1].day);
+            const rightDist = Math.abs(records[idx].day - xDate);
+            nearestIdx = leftDist <= rightDist ? idx-1 : idx;
+        }
+        return nearestIdx;
+    }
+    
+    // 处理交互（鼠标/触摸移动）
+    function handleInteraction(clientX, clientY) {
+        const idx = findNearestIndex(clientX, clientY);
+        if (idx !== -1 && idx !== currentHighlightIndex) {
+            currentHighlightIndex = idx;
+            drawBars(currentHighlightIndex);
+            showTooltipForIndex(currentHighlightIndex, clientX, clientY);
+        } else if (idx === -1 && currentHighlightIndex !== -1) {
+            // 移出图表区域
+            currentHighlightIndex = -1;
+            drawBars(-1);
+            hideTooltip();
+        } else if (idx !== -1 && idx === currentHighlightIndex) {
+            // 同一个点，仅更新tooltip位置（跟随移动）
+            if (currentHighlightIndex !== -1) {
+                showTooltipForIndex(currentHighlightIndex, clientX, clientY);
+            }
+        }
+    }
+    
+    // 绑定 Canvas 交互事件
+    function bindCanvasEvents() {
+        function onMove(event) {
+            event.preventDefault();
+            let clientX, clientY;
+            if (event.touches) {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+            handleInteraction(clientX, clientY);
+        }
+        function onLeave() {
+            if (currentHighlightIndex !== -1) {
+                currentHighlightIndex = -1;
+                drawBars(-1);
+                hideTooltip();
+            }
+        }
+        canvas.addEventListener("mousemove", onMove);
+        canvas.addEventListener("mouseleave", onLeave);
+        if (isTouchDevice) {
+            canvas.addEventListener("touchstart", onMove, { passive: false });
+            canvas.addEventListener("touchmove", onMove, { passive: false });
+            canvas.addEventListener("touchend", onLeave);
+        }
+    }
+    
+    // 初始化 Canvas 和比例尺
+    function initCanvas() {
+        margin = { top: 25, right: 30, bottom: 45, left: 48 };
+        width = 800 - margin.left - margin.right;
+        height = 420 - margin.top - margin.bottom;
+        canvasWidth = width + margin.left + margin.right;
+        canvasHeight = height + margin.top + margin.bottom;
+        
+        const container = document.getElementById("chart");
+        container.innerHTML = ""; // 清空
+        canvas = document.createElement("canvas");
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        canvas.style.width = "100%";
+        canvas.style.height = "auto";
+        container.appendChild(canvas);
+        ctx = canvas.getContext("2d");
+        
+        xScale = d3.scaleTime().range([margin.left, margin.left + width]);
+        yScale = d3.scaleLinear().range([margin.top + height, margin.top]);
+        
+        bindCanvasEvents();
+    }
+    
+    // 加载数据并绘制
+    function loadAndDraw(data) {
+        const parseDate = d3.timeParse("%Y-%m-%d");
+        records = data.day.map((d, i) => ({
+            day: parseDate(d),
+            pressure: data.pressure[i]
+        }));
+        updateScales();
+        drawBars(-1);
+        currentHighlightIndex = -1;
+    }
+    
+    
+    // 启动
+    initCanvas();
+    tooltipDiv = d3.select("body").append("div").attr("class", "tooltip");
+    
+    // 加载数据
+    d3.json("pressure-day.json").then(raw => {
+        if (raw && raw.day && raw.pressure && raw.day.length > 0) {
+            loadAndDraw(raw);
+            // 在 footer 追加数据量提示
+            d3.select("footer").html(`单位: hPa (百帕) &nbsp;|&nbsp; 实际数据点: ${raw.day.length} 个`);
+        } else {
+            throw new Error("数据无效");
+        }
+    }).catch(err => {
+        console.warn("未找到 pressure-day.json 或数据无效，", err);
+    });
+    
+    // 窗口尺寸变化时重新绘制（比例尺不变，仅重绘）
+    window.addEventListener("resize", () => {
+        if (records.length) drawBars(currentHighlightIndex);
+    });
+</script>
+</body>
+</html>

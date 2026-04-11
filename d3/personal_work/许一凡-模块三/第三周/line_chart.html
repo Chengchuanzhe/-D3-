@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>海气耦合可视化 - 温度折线图</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f7fa; 
+            color: #333;
+        }
+        .line-air { 
+            fill: none; 
+            stroke: #4fc3f7; 
+            stroke-width: 2px; 
+            stroke-linejoin: round;
+            stroke-linecap: round;
+        }
+        .line-sea { 
+            fill: none; 
+            stroke: #ff7043; 
+            stroke-width: 2px; 
+            stroke-linejoin: round;
+            stroke-linecap: round;
+        }
+        .axis-label { 
+            font-size: 12px; 
+            fill: #555; 
+        }
+        .legend {
+            font-size: 12px;
+        }
+        .legend-box {
+            stroke: #333;
+            stroke-width: 1px;
+        }
+        .chart-border {
+            stroke: #e0e0e0;
+            stroke-width: 1px;
+            fill: none;
+        }
+        #chart-container {
+            width: 90%;
+            margin: 20px auto;
+            max-width: 1000px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.85); 
+            border: 1px solid #444;
+            border-radius: 6px;
+            pointer-events: none;
+            font-size: 12px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            display: none;
+            color: #f0f0f0; 
+            min-width: 150px;
+        }
+        .tooltip-date {
+            font-weight: bold;
+            margin-bottom: 6px;
+            color: #4fc3f7; 
+            font-size: 13px;
+        }
+        .tooltip-value {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            align-items: center;
+        }
+        .tooltip-label {
+            color: #aaa;
+            margin-right: 5px;
+        }
+        .air-point {
+            fill: #4fc3f7;
+            r: 2;
+        }
+        .sea-point {
+            fill: #ff7043;
+            r: 2;
+        }
+        .title {
+            font-size: 18px;
+            font-weight: 600;
+            fill: #333;
+        }
+        .axis path,
+        .axis line {
+            stroke: #ccc;
+            shape-rendering: crispEdges;
+        }
+        .axis text {
+            fill: #666;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div id="chart-container">
+        <div id="chart"></div>
+    </div>
+    <div id="tooltip" class="tooltip"></div>
+    
+    <script>
+        const margin = {top: 80, right: 100, bottom: 70, left: 60};
+        let width, height;
+
+        function createSVG(container) {
+            const containerWidth = container.clientWidth;
+            width = containerWidth - margin.left - margin.right;
+            height = Math.min(Math.max(width * 0.5, 300), 600); // 高度为宽度一半，最小300，最大600
+            
+            // 移除旧svg
+            d3.select("#chart svg").remove();
+            return d3.select("#chart")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+        }
+
+        // 初始化数据
+        let processedData = [];
+        let xScale = d3.scaleTime();
+        let yScale = d3.scaleLinear();
+        let valuelineAir = d3.line();
+        let valuelineSea = d3.line();
+        let svg;
+
+        // 初始化图表
+        function initChart() {
+            svg = createSVG(document.getElementById('chart-container'));
+            loadData(); 
+            // 窗口变化监听
+            window.addEventListener('resize', handleResize);
+        }
+        
+        // 加载数据
+        function loadData() {
+            d3.json("Data.json").then(function(rawData) {
+                
+                const parseTime = d3.timeParse("%Y-%m-%d");
+                const dateMap = new Map();
+                
+                rawData.forEach(d => {
+                    const dateKey = d.date;
+                    if (!dateMap.has(dateKey)) {
+                        dateMap.set(dateKey, {
+                            date: dateKey,
+                            parsedDate: parseTime(dateKey),
+                            air_temp: d.air_temp,
+                            sea_temp: d.sea_temp
+                        });
+                    }
+                });
+                
+                processedData = Array.from(dateMap.values());
+                processedData.sort((a, b) => a.parsedDate - b.parsedDate);
+                
+                // 比例尺
+                updateScales();
+                // 图表
+                renderChart();                
+            }).catch(function(error) {
+                console.error("数据加载失败:", error);
+                alert("数据加载失败，请检查控制台日志");
+            });
+        }
+        
+        // 更新比例尺
+        function updateScales() {
+            xScale = d3.scaleTime()
+                .domain(d3.extent(processedData, d => d.parsedDate))
+                .range([0, width]);
+
+            const minTemp = d3.min(processedData, d => Math.min(d.air_temp, d.sea_temp)) - 2;
+            const maxTemp = d3.max(processedData, d => Math.max(d.air_temp, d.sea_temp)) + 2;
+            
+            yScale = d3.scaleLinear()
+                .domain([minTemp, maxTemp])
+                .range([height, 0]);
+                
+            // 更新折线
+            valuelineAir = d3.line()
+                .x((d) => xScale(d.parsedDate))
+                .y(d => yScale(d.air_temp));
+
+            valuelineSea = d3.line()
+                .x((d) => xScale(d.parsedDate))
+                .y(d => yScale(d.sea_temp));
+        }
+        
+        // 渲染图表
+        function renderChart() {
+            // 渐变背景
+            const gradient = svg.append("defs")
+                .append("linearGradient")
+                .attr("id", "chart-bg-gradient")
+                .attr("x1", "0%")
+                .attr("y1", "0%")
+                .attr("x2", "0%")
+                .attr("y2", "100%");
+            
+            gradient.append("stop")
+                .attr("offset", "0%")
+                .attr("stop-color", "#f8fafc");
+                
+            gradient.append("stop")
+                .attr("offset", "100%")
+                .attr("stop-color", "#e2e8f0");
+            
+            // 背景矩形
+            svg.append("rect")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("x", 0)
+                .attr("y", 0)
+                .attr("fill", "url(#chart-bg-gradient)")
+                .attr("rx", 4)
+                .attr("ry", 4);
+
+            // X轴
+            svg.selectAll(".x-axis").remove();
+            const xAxis = d3.axisBottom(xScale)
+                .ticks(Math.min(10, processedData.length))
+                .tickFormat(d3.timeFormat("%m/%d"));
+
+            svg.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", `translate(0,${height})`)
+                .call(xAxis);
+
+            // Y轴
+            svg.selectAll(".y-axis").remove();
+            svg.append("g")
+                .attr("class", "y-axis")
+                .call(d3.axisLeft(yScale).ticks(6));
+
+            // Y轴标签
+            svg.selectAll(".y-label").remove();
+            svg.append("text")
+                .attr("class", "y-label axis-label")
+                .attr("x", -10)
+                .attr("y", -10)
+                .text("温度 (°C)");
+
+            // 标题
+            svg.selectAll(".title").remove();
+            svg.append("text")
+                .attr("class", "title")
+                .attr("x", width / 2)
+                .attr("y", -40)
+                .attr("text-anchor", "middle")
+                .text("2022-2023台湾海峡海气温度趋势对比");
+
+            // 折线
+            svg.selectAll(".line-air").remove();
+            svg.append("path")
+                .datum(processedData)
+                .attr("class", "line-air")
+                .attr("d", valuelineAir);
+
+            svg.selectAll(".line-sea").remove();
+            svg.append("path")
+                .datum(processedData)
+                .attr("class", "line-sea")
+                .attr("d", valuelineSea);
+
+            // 更新图中内容
+            updatePoints();
+            updateLegend();
+            updateBorder();
+        }
+        
+        // 更新数据点
+        function updatePoints() {
+            const tooltip = d3.select("#tooltip");
+            
+            // 海温数据点
+            const seaPoints = svg.selectAll(".sea-point")
+                .data(processedData, d => d.date);
+                
+            seaPoints.exit().remove();
+            
+            seaPoints.enter()
+                .append("circle")
+                .attr("class", "sea-point")
+                .merge(seaPoints)
+                .attr("cx", d => xScale(d.parsedDate))
+                .attr("cy", d => yScale(d.sea_temp))
+                .on("mouseover", function(event, d) {
+                    tooltip.style("display", "block")
+                          .style("left", (event.pageX + 10) + "px")
+                          .style("top", (event.pageY + 10) + "px");
+
+                    const dateFormat = d3.timeFormat("%Y年%m月%d日");
+                    tooltip.html(`
+                        <div class="tooltip-date">${dateFormat(d.parsedDate)}</div>
+                        <div class="tooltip-value">
+                            <span class="tooltip-label">海表面温度:</span>
+                            <span>${d.sea_temp.toFixed(1)}°C</span>
+                        </div>
+                    `);
+                })
+                .on("mousemove", function(event) {
+                    tooltip.style("left", (event.pageX + 10) + "px")
+                          .style("top", (event.pageY + 10) + "px");
+                })
+                .on("mouseout", function() {
+                    tooltip.style("display", "none");
+                });
+
+            // 气温数据点
+            const airPoints = svg.selectAll(".air-point")
+                .data(processedData, d => d.date);
+                
+            airPoints.exit().remove();
+            
+            airPoints.enter()
+                .append("circle")
+                .attr("class", "air-point")
+                .merge(airPoints)
+                .attr("cx", d => xScale(d.parsedDate))
+                .attr("cy", d => yScale(d.air_temp))
+                .on("mouseover", function(event, d) {
+                    tooltip.style("display", "block")
+                          .style("left", (event.pageX + 10) + "px")
+                          .style("top", (event.pageY + 10) + "px");
+                    
+                    const dateFormat = d3.timeFormat("%Y年%m月%d日");
+                    tooltip.html(`
+                        <div class="tooltip-date">${dateFormat(d.parsedDate)}</div>
+                        <div class="tooltip-value">
+                            <span class="tooltip-label">近地面气温:</span>
+                            <span>${d.air_temp.toFixed(1)}°C</span>
+                        </div>
+                    `);
+                })
+                .on("mousemove", function(event) {
+                    tooltip.style("left", (event.pageX + 10) + "px")
+                          .style("top", (event.pageY + 10) + "px");
+                })
+                .on("mouseout", function() {
+                    tooltip.style("display", "none");
+                });
+        }
+        
+        // 更新图例
+        function updateLegend() {
+            svg.selectAll(".legend").remove();
+            const legend = svg.append("g")
+                .attr("class", "legend")
+                .attr("transform", `translate(${width - 150}, -50)`);
+
+            // 海温
+            legend.append("rect")
+                .attr("x", 0)
+                .attr("y", 0)
+                .attr("width", 12)
+                .attr("height", 12)
+                .style("fill", "#ff7043");
+
+            legend.append("text")
+                .attr("x", 20)
+                .attr("y", 10)
+                .text("海表面温度");
+
+            // 气温
+            legend.append("rect")
+                .attr("x", 0)
+                .attr("y", 20)
+                .attr("width", 12)
+                .attr("height", 12)
+                .style("fill", "#4fc3f7");
+
+            legend.append("text")
+                .attr("x", 20)
+                .attr("y", 30)
+                .text("近地面气温");
+        }
+            
+        // 更新边框
+        function updateBorder() {
+            svg.selectAll(".chart-border").remove();
+            svg.append("path")
+                .attr("class", "chart-border")
+                .attr("d", `M0,0 H${width} V${height} H0 Z`);
+        }
+        
+        // 大小适应
+        function handleResize() {
+            // 重制SVG
+            svg = createSVG(document.getElementById('chart-container'));
+            loadData();
+        }
+        
+        initChart();
+    </script>
+</body>
+</html>

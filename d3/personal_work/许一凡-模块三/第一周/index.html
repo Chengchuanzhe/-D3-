@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+    <h1>许一凡第一周基础图形渲染</h1>
+    <script>
+
+            const svg = d3.select("body")      
+                .append("svg")         
+                .attr("width", 600)  
+                .attr("height", 300)   
+           
+            //矩形
+            svg.append("rect")
+                .attr("x", 50)       
+                .attr("y", 50)       
+                .attr("width", 120)  
+                .attr("height", 100)  
+                .attr("fill", "blue"); 
+
+            //圆形
+            svg.append("circle")
+                .attr("cx", 250)    
+                .attr("cy", 100)      
+                .attr("r", 50)       
+                .attr("fill", "red");  
+
+            //椭圆
+            svg.append("ellipse")
+                .attr("cx", 450)     
+                .attr("cy", 100)     
+                .attr("rx", 100)     
+                .attr("ry", 50)      
+                .attr("fill", "yellow"); 
+    </script>
+</body>
+</html>
