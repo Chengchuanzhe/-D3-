@@ -1,0 +1,602 @@
+<!-- # 2组 - 程传哲 - 第三周 - 基础交互 + 多图联动 + 个性化图表 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2组-程传哲-第三周-交互与多图联动</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <main class="app">
+        <section class="card">
+            <h1>第3周：基础交互与多图联动（模块4主责）</h1>
+            <p>实现内容：点击/悬浮高亮、统一 Tooltip、下拉筛选、柱状图+折线图+个性化图表联动。</p>
+            <div class="controls">
+                <div class="field">
+                    <label for="regionSelect">区域筛选</label>
+                    <select id="regionSelect"></select>
+                </div>
+                <div class="field">
+                    <label for="yearSelect">年份筛选</label>
+                    <select id="yearSelect"></select>
+                </div>
+                <div class="field">
+                    <label for="metricSelect">数值字段</label>
+                    <select id="metricSelect">
+                        <option value="pressure">气压 pressure</option>
+                        <option value="air_temp">气温 air_temp</option>
+                        <option value="sea_temp">海温 sea_temp</option>
+                        <option value="humidity">湿度 humidity</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="monthSelect">月份过滤（联动核心）</label>
+                    <select id="monthSelect"></select>
+                </div>
+            </div>
+            <p id="statusText" class="meta"></p>
+            <div id="warnBox" class="warn hidden"></div>
+        </section>
+
+        <section class="charts">
+            <article class="card">
+                <h2 class="chart-title">柱状图：月均值总览（点击锁定月份）</h2>
+                <p class="meta">主责点：交互事件监听 + 选中状态广播</p>
+                <div id="barChart"></div>
+            </article>
+
+            <article class="card">
+                <h2 class="chart-title">折线图：日序列趋势（与柱状图同步）</h2>
+                <p class="meta">主责点：数据筛选后 enter/update/exit 更新</p>
+                <div id="lineChart"></div>
+            </article>
+
+            <article class="card">
+                <h2 class="chart-title">个性化图表：风速脉冲环图</h2>
+                <p class="meta">主责点：自定义图表 + 联动高亮</p>
+                <div id="radialChart"></div>
+                <div class="legend">
+                    <span><i class="dot d1"></i>柱状图</span>
+                    <span><i class="dot d2"></i>折线图</span>
+                    <span><i class="dot d3"></i>脉冲环图</span>
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <script>
+        // # 2组 - 程传哲 - 第三周 - 基础交互 + 多图联动 + 个性化图表
+        const state = {
+            region: "全部",
+            year: "全部",
+            metric: "pressure",
+            month: "全部",
+            hoverMonth: null
+        };
+
+        const metricMeta = {
+            pressure: { label: "气压", unit: "hPa" },
+            air_temp: { label: "气温", unit: "°C" },
+            sea_temp: { label: "海温", unit: "°C" },
+            humidity: { label: "湿度", unit: "%" }
+        };
+
+        let sourceData = [];
+        let barSelection = null;
+        let pointSelection = null;
+        let radialSelection = null;
+
+        const regionSelect = document.getElementById("regionSelect");
+        const yearSelect = document.getElementById("yearSelect");
+        const metricSelect = document.getElementById("metricSelect");
+        const monthSelect = document.getElementById("monthSelect");
+        const statusText = document.getElementById("statusText");
+        const warnBox = document.getElementById("warnBox");
+        const tooltip = d3.select("#tooltip");
+
+        const barCfg = { width: 450, height: 300, margin: { top: 20, right: 12, bottom: 44, left: 52 } };
+        const lineCfg = { width: 450, height: 300, margin: { top: 20, right: 12, bottom: 44, left: 52 } };
+        const radialCfg = { width: 320, height: 320 };
+
+        const barSvg = d3.select("#barChart").append("svg").attr("viewBox", `0 0 ${barCfg.width} ${barCfg.height}`);
+        const lineSvg = d3.select("#lineChart").append("svg").attr("viewBox", `0 0 ${lineCfg.width} ${lineCfg.height}`);
+        const radialSvg = d3.select("#radialChart").append("svg").attr("viewBox", `0 0 ${radialCfg.width} ${radialCfg.height}`);
+
+        const barW = barCfg.width - barCfg.margin.left - barCfg.margin.right;
+        const barH = barCfg.height - barCfg.margin.top - barCfg.margin.bottom;
+        const lineW = lineCfg.width - lineCfg.margin.left - lineCfg.margin.right;
+        const lineH = lineCfg.height - lineCfg.margin.top - lineCfg.margin.bottom;
+
+        const barG = barSvg.append("g").attr("transform", `translate(${barCfg.margin.left},${barCfg.margin.top})`);
+        const lineG = lineSvg.append("g").attr("transform", `translate(${lineCfg.margin.left},${lineCfg.margin.top})`);
+        const radialG = radialSvg.append("g").attr("transform", `translate(${radialCfg.width / 2},${radialCfg.height / 2})`);
+
+        const barXAxis = barG.append("g").attr("class", "axis").attr("transform", `translate(0,${barH})`);
+        const barYAxis = barG.append("g").attr("class", "axis");
+        const lineXAxis = lineG.append("g").attr("class", "axis").attr("transform", `translate(0,${lineH})`);
+        const lineYAxis = lineG.append("g").attr("class", "axis");
+
+        const barGrid = barG.append("g").attr("class", "bar-grid");
+        const barLayer = barG.append("g");
+        const barRefLayer = barG.append("g");
+        const barValueLayer = barG.append("g");
+        const lineLayer = lineG.append("g");
+        const pointLayer = lineG.append("g");
+        const radialLayer = radialG.append("g");
+        const radialLabelLayer = radialG.append("g");
+
+        function showWarn(text) {
+            warnBox.textContent = text;
+            warnBox.classList.remove("hidden");
+        }
+
+        function hideWarn() {
+            warnBox.classList.add("hidden");
+            warnBox.textContent = "";
+        }
+
+        function showTip(event, html) {
+            tooltip
+                .html(html)
+                .classed("hidden", false)
+                .style("left", `${event.pageX + 12}px`)
+                .style("top", `${event.pageY - 16}px`);
+        }
+
+        function moveTip(event) {
+            tooltip
+                .style("left", `${event.pageX + 12}px`)
+                .style("top", `${event.pageY - 16}px`);
+        }
+
+        function hideTip() {
+            tooltip.classed("hidden", true);
+        }
+
+        function normalizeRows(raw) {
+            return raw
+                .map(d => {
+                    const dateObj = new Date(String(d.date));
+                    if (Number.isNaN(dateObj.getTime())) {
+                        return null;
+                    }
+                    return {
+                        ...d,
+                        dateObj,
+                        date: String(d.date),
+                        year: String(dateObj.getFullYear()),
+                        monthKey: String(d.date).slice(0, 7),
+                        pressure: Number(d.pressure),
+                        air_temp: Number(d.air_temp),
+                        sea_temp: Number(d.sea_temp),
+                        humidity: Number(d.humidity),
+                        wind_speed: Number(d.wind_speed),
+                        precipitation: Number(d.precipitation)
+                    };
+                })
+                .filter(Boolean)
+                .filter(d => Number.isFinite(d.pressure) && Number.isFinite(d.air_temp) && Number.isFinite(d.sea_temp) && Number.isFinite(d.humidity));
+        }
+
+        function fillSelect(selectEl, options, keepValue) {
+            selectEl.innerHTML = options.map(v => `<option value="${v}">${v}</option>`).join("");
+            if (options.includes(keepValue)) {
+                selectEl.value = keepValue;
+            }
+        }
+
+        function updateMonthOptions() {
+            const base = sourceData.filter(d =>
+                (state.region === "全部" || d.region_name === state.region) &&
+                (state.year === "全部" || d.year === state.year)
+            );
+            const months = [...new Set(base.map(d => d.monthKey))].sort();
+            const options = ["全部", ...months];
+            if (!options.includes(state.month)) {
+                state.month = "全部";
+            }
+            fillSelect(monthSelect, options, state.month);
+        }
+
+        function filteredBase() {
+            return sourceData.filter(d =>
+                (state.region === "全部" || d.region_name === state.region) &&
+                (state.year === "全部" || d.year === state.year)
+            );
+        }
+
+        function summarizeData(baseRows) {
+            const metric = state.metric;
+            const lineRows = state.month === "全部"
+                ? [...baseRows]
+                : baseRows.filter(d => d.monthKey === state.month);
+            lineRows.sort((a, b) => a.dateObj - b.dateObj);
+
+            const monthMetric = d3.rollups(
+                baseRows,
+                vals => ({
+                    monthKey: vals[0].monthKey,
+                    value: d3.mean(vals, v => Number(v[metric])),
+                    count: vals.length
+                }),
+                d => d.monthKey
+            )
+                .map(([, v]) => v)
+                .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+
+            const monthWind = d3.rollups(
+                baseRows,
+                vals => ({
+                    monthKey: vals[0].monthKey,
+                    value: d3.mean(vals, v => Number(v.wind_speed)),
+                    prec: d3.mean(vals, v => Number(v.precipitation)),
+                    count: vals.length
+                }),
+                d => d.monthKey
+            )
+                .map(([, v]) => v)
+                .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+
+            return { lineRows, monthMetric, monthWind };
+        }
+
+        function currentActiveMonth() {
+            return state.hoverMonth || (state.month !== "全部" ? state.month : null);
+        }
+
+        function syncLinkedStyles() {
+            const active = currentActiveMonth();
+            if (barSelection) {
+                barSelection
+                    .classed("is-dim", d => !!active && d.monthKey !== active)
+                    .classed("is-active", d => !active || d.monthKey === active);
+            }
+            if (pointSelection) {
+                pointSelection
+                    .classed("is-dim", d => !!active && d.monthKey !== active)
+                    .classed("is-active", d => !active || d.monthKey === active);
+            }
+            if (radialSelection) {
+                radialSelection
+                    .classed("is-dim", d => !!active && d.monthKey !== active)
+                    .classed("is-active", d => !active || d.monthKey === active);
+            }
+        }
+
+        function toggleMonthFromChart(monthKey) {
+            state.month = state.month === monthKey ? "全部" : monthKey;
+            monthSelect.value = state.month;
+            state.hoverMonth = null;
+            renderAll();
+        }
+
+        function renderBar(monthMetric) {
+            if (monthMetric.length === 0) {
+                barLayer.selectAll("*").remove();
+                barRefLayer.selectAll("*").remove();
+                barValueLayer.selectAll("*").remove();
+                barGrid.selectAll("*").remove();
+                barXAxis.call(d3.axisBottom(d3.scaleBand().domain([]).range([0, barW])));
+                barYAxis.call(d3.axisLeft(d3.scaleLinear().domain([0, 1]).range([barH, 0])));
+                barSelection = null;
+                return;
+            }
+
+            const x = d3.scaleBand()
+                .domain(monthMetric.map(d => d.monthKey))
+                .range([0, barW])
+                .padding(0.22);
+
+            const minVal = d3.min(monthMetric, d => d.value);
+            const maxVal = d3.max(monthMetric, d => d.value);
+            const span = Math.max(maxVal - minVal, 0);
+
+            // 对数值很接近的月份，启用聚焦纵轴放大差异。
+            const focused = span > 0 && (span / Math.max(Math.abs(maxVal), 1)) < 0.08;
+            const pad = Math.max(span * 0.35, Math.abs(maxVal) * 0.002, 0.2);
+            const yMin = focused ? (minVal - pad) : 0;
+            const yMax = focused ? (maxVal + pad) : (maxVal * 1.1);
+
+            const y = d3.scaleLinear()
+                .domain([yMin, yMax])
+                .nice()
+                .range([barH, 0]);
+
+            const valueFmt = focused ? d3.format(".2f") : d3.format(".0f");
+            const unit = metricMeta[state.metric].unit;
+
+            barXAxis.call(d3.axisBottom(x).tickFormat(d => d.slice(2)));
+            barYAxis.call(d3.axisLeft(y).ticks(6).tickFormat(valueFmt));
+
+            barGrid.call(
+                d3.axisLeft(y).ticks(6).tickSize(-barW).tickFormat("")
+            );
+            barGrid.select(".domain").remove();
+
+            const color = d3.scaleLinear()
+                .domain([minVal, maxVal])
+                .range(["#c9d9f3", "#2f80ed"]);
+
+            barSelection = barLayer.selectAll(".bar")
+                .data(monthMetric, d => d.monthKey)
+                .join(
+                    enter => enter.append("rect")
+                        .attr("class", "bar")
+                        .attr("x", d => x(d.monthKey))
+                        .attr("y", barH)
+                        .attr("width", x.bandwidth())
+                        .attr("height", 0),
+                    update => update,
+                    exit => exit.transition().duration(260).attr("y", barH).attr("height", 0).remove()
+                );
+
+            barSelection.transition().duration(420)
+                .attr("x", d => x(d.monthKey))
+                .attr("width", x.bandwidth())
+                .attr("y", d => y(d.value))
+                .attr("height", d => barH - y(d.value))
+                .attr("fill", d => color(d.value))
+                .attr("rx", 4);
+
+            const avg = d3.mean(monthMetric, d => d.value);
+            barRefLayer.selectAll(".bar-avg-line")
+                .data([avg])
+                .join("line")
+                .attr("class", "bar-avg-line")
+                .attr("x1", 0)
+                .attr("x2", barW)
+                .attr("y1", d => y(d))
+                .attr("y2", d => y(d));
+
+            barRefLayer.selectAll(".bar-avg-label")
+                .data([avg])
+                .join("text")
+                .attr("class", "bar-avg-label")
+                .attr("x", barW - 4)
+                .attr("y", d => y(d) - 5)
+                .attr("text-anchor", "end")
+                .text(d => `均值 ${valueFmt(d)} ${unit}`);
+
+            barRefLayer.selectAll(".bar-scale-note")
+                .data([focused])
+                .join("text")
+                .attr("class", "bar-scale-note")
+                .attr("x", 0)
+                .attr("y", -6)
+                .text(d => d ? "已启用聚焦纵轴（放大差异）" : "标准纵轴");
+
+            const minMonth = d3.least(monthMetric, d => d.value).monthKey;
+            const maxMonth = d3.greatest(monthMetric, d => d.value).monthKey;
+            const active = currentActiveMonth();
+            const keep = new Set([minMonth, maxMonth]);
+            if (active) keep.add(active);
+
+            barValueLayer.selectAll(".bar-value-label")
+                .data(monthMetric.filter(d => keep.has(d.monthKey)), d => d.monthKey)
+                .join("text")
+                .attr("class", "bar-value-label")
+                .attr("x", d => x(d.monthKey) + x.bandwidth() / 2)
+                .attr("y", d => y(d.value) - 7)
+                .attr("text-anchor", "middle")
+                .text(d => valueFmt(d.value));
+
+            barSelection
+                .on("mouseenter", (event, d) => {
+                    state.hoverMonth = d.monthKey;
+                    showTip(event, `<strong>${d.monthKey}</strong><br/>月均值：${d.value.toFixed(2)} ${unit}<br/>样本数：${d.count}`);
+                    syncLinkedStyles();
+                })
+                .on("mousemove", moveTip)
+                .on("mouseleave", () => {
+                    state.hoverMonth = null;
+                    hideTip();
+                    syncLinkedStyles();
+                })
+                .on("click", (_, d) => {
+                    toggleMonthFromChart(d.monthKey);
+                });
+        }
+
+        function renderLine(lineRows) {
+            if (lineRows.length === 0) {
+                lineLayer.selectAll("*").remove();
+                pointLayer.selectAll("*").remove();
+                pointSelection = null;
+                lineXAxis.call(d3.axisBottom(d3.scaleTime().domain([new Date("2024-01-01"), new Date("2024-01-02")]).range([0, lineW])));
+                lineYAxis.call(d3.axisLeft(d3.scaleLinear().domain([0, 1]).range([lineH, 0])));
+                return;
+            }
+
+            const metric = state.metric;
+            const x = d3.scaleTime()
+                .domain(d3.extent(lineRows, d => d.dateObj))
+                .range([0, lineW]);
+            const y = d3.scaleLinear()
+                .domain(d3.extent(lineRows, d => Number(d[metric])))
+                .nice()
+                .range([lineH, 0]);
+
+            lineXAxis.call(d3.axisBottom(x).ticks(6).tickFormat(d3.timeFormat("%y-%m")));
+            lineYAxis.call(d3.axisLeft(y).ticks(6));
+
+            const lineFn = d3.line()
+                .x(d => x(d.dateObj))
+                .y(d => y(Number(d[metric])));
+
+            lineLayer.selectAll(".line-main")
+                .data([lineRows])
+                .join("path")
+                .attr("class", "line-main")
+                .transition()
+                .duration(420)
+                .attr("d", lineFn);
+
+            // 这里是联动核心：折线点与柱状图共用 monthKey，事件广播给其他图。
+            pointSelection = pointLayer.selectAll(".line-point")
+                .data(lineRows, d => d.date)
+                .join(
+                    enter => enter.append("circle")
+                        .attr("class", "line-point")
+                        .attr("r", 0),
+                    update => update,
+                    exit => exit.transition().duration(260).attr("r", 0).remove()
+                );
+
+            pointSelection.transition().duration(420)
+                .attr("cx", d => x(d.dateObj))
+                .attr("cy", d => y(Number(d[metric])))
+                .attr("r", 3.6);
+
+            pointSelection
+                .on("mouseenter", (event, d) => {
+                    state.hoverMonth = d.monthKey;
+                    showTip(event, `<strong>${d.date}</strong><br/>${metricMeta[metric].label}：${Number(d[metric]).toFixed(2)} ${metricMeta[metric].unit}`);
+                    syncLinkedStyles();
+                })
+                .on("mousemove", moveTip)
+                .on("mouseleave", () => {
+                    state.hoverMonth = null;
+                    hideTip();
+                    syncLinkedStyles();
+                })
+                .on("click", (_, d) => {
+                    toggleMonthFromChart(d.monthKey);
+                });
+        }
+
+        function renderRadial(monthWind) {
+            radialLayer.selectAll("*").remove();
+            radialLabelLayer.selectAll("*").remove();
+            radialSelection = null;
+
+            if (monthWind.length === 0) {
+                return;
+            }
+
+            const angle = d3.scaleBand()
+                .domain(monthWind.map(d => d.monthKey))
+                .range([0, Math.PI * 2])
+                .padding(0.12);
+
+            const maxWind = d3.max(monthWind, d => d.value);
+            const radius = d3.scaleLinear()
+                .domain([0, maxWind])
+                .range([44, 124]);
+
+            const color = d3.scaleLinear()
+                .domain(d3.extent(monthWind, d => d.value))
+                .range(["#91e3d0", "#0f8f72"]);
+
+            const arc = d3.arc()
+                .innerRadius(34)
+                .outerRadius(d => radius(d.value))
+                .startAngle(d => angle(d.monthKey))
+                .endAngle(d => angle(d.monthKey) + angle.bandwidth());
+
+            radialSelection = radialLayer.selectAll(".radial-segment")
+                .data(monthWind, d => d.monthKey)
+                .join("path")
+                .attr("class", "radial-segment")
+                .attr("d", arc)
+                .attr("fill", d => color(d.value));
+
+            radialSelection
+                .on("mouseenter", (event, d) => {
+                    state.hoverMonth = d.monthKey;
+                    showTip(event, `<strong>${d.monthKey}</strong><br/>月均风速：${d.value.toFixed(2)} m/s<br/>月均降水：${d.prec.toFixed(2)} mm`);
+                    syncLinkedStyles();
+                })
+                .on("mousemove", moveTip)
+                .on("mouseleave", () => {
+                    state.hoverMonth = null;
+                    hideTip();
+                    syncLinkedStyles();
+                })
+                .on("click", (_, d) => {
+                    toggleMonthFromChart(d.monthKey);
+                });
+
+            radialLabelLayer.selectAll(".radial-label")
+                .data(monthWind, d => d.monthKey)
+                .join("text")
+                .attr("class", "radial-label")
+                .attr("x", d => Math.cos(angle(d.monthKey) + angle.bandwidth() / 2 - Math.PI / 2) * 138)
+                .attr("y", d => Math.sin(angle(d.monthKey) + angle.bandwidth() / 2 - Math.PI / 2) * 138)
+                .attr("text-anchor", "middle")
+                .attr("font-size", 10.5)
+                .attr("fill", "#4d6088")
+                .text(d => d.monthKey.slice(5));
+        }
+
+        function renderAll() {
+            hideWarn();
+
+            const baseRows = filteredBase();
+            if (baseRows.length === 0) {
+                showWarn("当前筛选条件下没有数据，请切换区域或年份。");
+            }
+
+            const { lineRows, monthMetric, monthWind } = summarizeData(baseRows);
+            renderBar(monthMetric);
+            renderLine(lineRows);
+            renderRadial(monthWind);
+            syncLinkedStyles();
+
+            const metric = metricMeta[state.metric];
+            statusText.textContent = `当前：区域[${state.region}] 年份[${state.year}] 指标[${metric.label}] 月份[${state.month}]，折线样本 ${lineRows.length} 条。`;
+        }
+
+        async function init() {
+            if (window.location.protocol === "file:") {
+                showWarn("请使用本地 HTTP 访问，不要用 file:// 打开，否则无法读取 Data.json。");
+                return;
+            }
+
+            try {
+                const raw = await d3.json("../../../Data.json");
+                sourceData = normalizeRows(raw);
+            } catch (err) {
+                showWarn(`数据加载失败：${String(err)}`);
+                return;
+            }
+
+            const regions = ["全部", ...new Set(sourceData.map(d => d.region_name))];
+            const years = ["全部", ...new Set(sourceData.map(d => d.year))];
+            fillSelect(regionSelect, regions, state.region);
+            fillSelect(yearSelect, years, state.year);
+            metricSelect.value = state.metric;
+            updateMonthOptions();
+
+            // 这里是筛选主干：下拉变化触发重绘，形成完整过滤 -> 更新 -> 联动链路。
+            regionSelect.addEventListener("change", () => {
+                state.region = regionSelect.value;
+                updateMonthOptions();
+                renderAll();
+            });
+            yearSelect.addEventListener("change", () => {
+                state.year = yearSelect.value;
+                updateMonthOptions();
+                renderAll();
+            });
+            metricSelect.addEventListener("change", () => {
+                state.metric = metricSelect.value;
+                renderAll();
+            });
+            monthSelect.addEventListener("change", () => {
+                state.month = monthSelect.value;
+                renderAll();
+            });
+
+            renderAll();
+        }
+
+        init();
+        // # 2组 - 程传哲 - 第三周 - 基础交互 + 多图联动 + 个性化图表end
+    </script>
+</body>
+</html>
+<!-- # 2组 - 程传哲 - 第三周 - 基础交互 + 多图联动 + 个性化图表end -->
