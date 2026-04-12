@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>海气耦合可视化 - 温度折线图</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .line-air { fill: none; stroke: steelblue; stroke-width: 2px; }
+        .line-sea { fill: none; stroke: tomato; stroke-width: 2px; }
+        .axis-label { font-size: 12px; fill: #333; }
+        .legend {
+            font-size: 12px;
+        }
+        .legend-box {
+            stroke: #333;
+            stroke-width: 1px;
+        }
+        .chart-border {
+            stroke: #333;
+            stroke-width: 1px;
+            fill: none;
+        }
+        #chart-container {
+            width: 90%;
+            margin: 20px auto;
+            max-width: 1000px;
+        }
+    </style>
+</head>
+<body>
+    <div id="chart-container">
+        <div id="chart"></div>
+    </div>
+    
+    <script>
+        const margin = {top: 80, right: 100, bottom: 70, left: 60};
+        let width, height;
+
+        function createSVG(container) {
+            const containerWidth = container.clientWidth;
+            width = containerWidth - margin.left - margin.right;
+            height = Math.min(Math.max(width * 0.5, 300), 600); // 高度为宽度一半，最小300，最大600
+            
+            // 移除旧svg
+            d3.select("#chart svg").remove();
+            return d3.select("#chart")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+        }
+
+        // 初始化数据
+        let aggregatedData = [];
+        let xScale = d3.scaleTime();
+        let yScale = d3.scaleLinear();
+        let valuelineAir = d3.line();
+        let valuelineSea = d3.line();
+        let svg;
+
+        //初始化图表
+        function initChart() {
+            svg = createSVG(document.getElementById('chart-container'));
+            loadData(); 
+            // 窗口变化监听
+            window.addEventListener('resize', handleResize);
+        }
+        
+        // 加载数据
+        function loadData() {
+            d3.json("Data.json").then(function(rawData) {
+                // 按天聚合海温取平均值
+                const parseTime = d3.timeParse("%Y-%m-%d");
+                const dateGroup = d3.groups(rawData, d => d.date);
+                
+                aggregatedData = dateGroup.map(([date, group]) => {
+                    const parsedDate = parseTime(date);
+                    const avgAirTemp = d3.mean(group, d => d.air_temp);
+                    const avgSeaTemp = d3.mean(group, d => d.sea_temp);
+                    return {
+                        date: date,
+                        parsedDate: parsedDate,
+                        air_temp: avgAirTemp,
+                        sea_temp: avgSeaTemp
+                    };
+                });                
+                // 日期
+                aggregatedData.sort((a, b) => a.parsedDate - b.parsedDate);              
+                // 比例尺
+                updateScales();
+                // 图表
+                renderChart();                
+            }).catch(function(error) {
+                console.error("数据加载失败:", error);
+                alert("数据加载失败，请检查控制台日志");
+            });
+        }
+        
+        // 更新比例尺
+        function updateScales() {
+            //更新坐标轴
+            xScale = d3.scaleTime()
+                .domain(d3.extent(aggregatedData, d => d.parsedDate))
+                .range([0, width]);
+
+            const minTemp = d3.min(aggregatedData, d => Math.min(d.air_temp, d.sea_temp)) - 2;
+            const maxTemp = d3.max(aggregatedData, d => Math.max(d.air_temp, d.sea_temp)) + 2;
+            
+            yScale = d3.scaleLinear()
+                .domain([minTemp, maxTemp])
+                .range([height, 0]);
+                
+            // 更新折线
+            valuelineAir = d3.line()
+                .x(d => xScale(d.parsedDate))
+                .y(d => yScale(d.air_temp));
+
+            valuelineSea = d3.line()
+                .x(d => xScale(d.parsedDate))
+                .y(d => yScale(d.sea_temp));
+        }
+        
+        // 渲染图表
+        function renderChart() {
+            // X轴
+            svg.selectAll(".x-axis").remove();
+            svg.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(xScale).ticks(8));
+
+            // Y轴
+            svg.selectAll(".y-axis").remove();
+            svg.append("g")
+                .attr("class", "y-axis")
+                .call(d3.axisLeft(yScale));
+
+            // Y轴标签
+            svg.selectAll(".y-label").remove();
+            svg.append("text")
+                .attr("class", "y-label axis-label")
+                .attr("x", -10)
+                .attr("y", -10)
+                .text("温度 (°C)");
+
+            // 标题
+            svg.selectAll(".title").remove();
+            svg.append("text")
+                .attr("class", "title")
+                .attr("x", width / 2)
+                .attr("y", -40)
+                .attr("text-anchor", "middle")
+                .style("font-size", "16px")
+                .text("2022-2023台湾海峡海气温度趋势对比");
+
+            // 折线
+            svg.selectAll(".line-air").remove();
+            svg.append("path")
+                .datum(aggregatedData)
+                .attr("class", "line-air")
+                .attr("d", valuelineAir);
+
+            svg.selectAll(".line-sea").remove();
+            svg.append("path")
+                .datum(aggregatedData)
+                .attr("class", "line-sea")
+                .attr("d", valuelineSea);
+
+            // 更新图中内容
+            updatePoints();
+            updateLegend();
+            updateBorder();
+        }
+        
+        // 更新数据点
+        function updatePoints() {
+            // 海温
+            const seaPoints = svg.selectAll(".sea-point")
+                .data(aggregatedData, d => d.date);          
+            seaPoints.exit().remove();
+
+            // 气温
+            const airPoints = svg.selectAll(".air-point")
+                .data(aggregatedData, d => d.date);
+            airPoints.exit().remove();
+        }
+        
+        // 更新图例
+        function updateLegend() {
+            svg.selectAll(".legend").remove();
+            const legend = svg.append("g")
+                .attr("class", "legend")
+                .attr("transform", `translate(${width - 150}, -50)`);
+
+            // 海温
+            legend.append("rect")
+                .attr("x", 0)
+                .attr("y", 0)
+                .attr("width", 12)
+                .attr("height", 12)
+                .style("fill", "tomato");
+
+            legend.append("text")
+                .attr("x", 20)
+                .attr("y", 10)
+                .text("海表面温度");
+
+            // 气温
+            legend.append("rect")
+                .attr("x", 0)
+                .attr("y", 20)
+                .attr("width", 12)
+                .attr("height", 12)
+                .style("fill", "steelblue");
+
+            legend.append("text")
+                .attr("x", 20)
+                .attr("y", 30)
+                .text("近地面气温");
+        }
+            
+        // 更新边框
+        function updateBorder() {
+            svg.selectAll(".chart-border").remove();
+            svg.append("path")
+                .attr("class", "chart-border")
+                .attr("d", `M0,0 H${width} V${height} H0 Z`);
+        }
+        
+        // 大小适应
+        function handleResize() {
+            // 重制SVG
+            svg = createSVG(document.getElementById('chart-container'));
+            loadData();
+        }
+        
+        initChart();
+    </script>
+</body>
+</html>
